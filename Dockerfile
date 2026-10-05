@@ -18,6 +18,7 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 COPY backend/ ./
+COPY shared/ /var/www/shared/
 RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader \
     && a2enmod rewrite headers \
     && sed -ri 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-available/000-default.conf \
