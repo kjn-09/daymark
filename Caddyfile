@@ -1,0 +1,53 @@
+{
+	auto_https off
+}
+
+https://localhost {
+	tls backend/storage/app/private/certs/localhost.pem backend/storage/app/private/certs/localhost-key.pem {
+		protocols tls1.3 tls1.3
+	}
+
+	route {
+		@laravel path /api/* /csrf-token /email/* /account/*
+		reverse_proxy @laravel 127.0.0.1:8000 {
+			header_up X-Forwarded-Proto {scheme}
+		}
+
+		handle_path /ui/* {
+			root * backend/public/ui
+			header Cache-Control "no-store"
+			file_server
+		}
+
+		handle {
+			root * backend/public/ui
+			header Cache-Control "no-store"
+			rewrite * /index.html
+			file_server
+		}
+	}
+}
+
+:8080 {
+	bind 127.0.0.1
+	route {
+		@laravel path /api/* /csrf-token /email/* /account/*
+		reverse_proxy @laravel 127.0.0.1:8000 {
+			header_up X-Forwarded-Host {http.request.host}
+			header_up X-Forwarded-Proto {http.request.header.X-Forwarded-Proto}
+		}
+
+		handle_path /ui/* {
+			root * backend/public/ui
+			header Cache-Control "no-store"
+			file_server
+		}
+
+		handle {
+			root * backend/public/ui
+			header Cache-Control "no-store"
+			rewrite * /index.html
+			file_server
+		}
+	}
+}

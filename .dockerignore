@@ -1,0 +1,14 @@
+.git
+**/.env
+**/.env.*
+**/vendor
+**/node_modules
+backend/public/ui
+backend/database/database.sqlite
+backend/storage/app/private/*.json
+backend/storage/app/private/*.json.lock
+backend/storage/framework/testing/application-state.json
+backend/storage/framework/testing/application-state.json.lock
+backend/storage/logs/*.log
+backend/.phpunit.result.cache
+backend/.phpunit.cache
