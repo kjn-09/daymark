@@ -508,7 +508,11 @@ function App() {
               </div>
               <div className="form-row">
                 <label>Country<select name="country" required value={form.country} onChange={(event) => updateFormField('country', event.target.value, event.currentTarget, ['mobile_number', 'state', 'city', 'region_code', 'city_code', 'zip_code'])}><option value="">Select a country</option>{registrationCountries.map((country) => <option key={country.shortName} value={country.name}>{country.name}</option>)}</select>{fieldError('country')}</label>
-                <label>Mobile number<span className="phone-field"><span>+{selectedCountry?.phone || ''}</span><input name="mobile_number" type="tel" inputMode="tel" autoComplete="tel-national" required value={form.mobile_number} onChange={(event) => updateFormField('mobile_number', new AsYouType(selectedCountryCode).input(event.target.value.replace(/\D/g, '').slice(0, 15)), event.currentTarget)} placeholder="Mobile number" /></span>{fieldError('mobile_number')}</label>
+                <label>Mobile number<span className="phone-field"><span>+{selectedCountry?.phone || ''}</span><input name="mobile_number" type="tel" inputMode="tel" autoComplete="tel-national" required value={form.mobile_number} onChange={(event) => {
+                  let digits = event.target.value.replace(/\D/g, '').slice(0, 15)
+                  if (selectedCountryCode === 'PH' && digits.startsWith('0') && digits.length >= 11) digits = digits.slice(1)
+                  updateFormField('mobile_number', new AsYouType(selectedCountryCode).input(digits), event.currentTarget)
+                }} placeholder="Mobile number" /></span>{fieldError('mobile_number')}</label>
               </div>
               <label>House &amp; street<input name="house_street" autoComplete="street-address" required maxLength="255" pattern="[\p{L}\p{M}\p{N}\s.,#'\/()-]+" value={form.house_street} onChange={(event) => updateFormField('house_street', event.target.value, event.currentTarget)} placeholder="House number, street, and barangay" />{fieldError('house_street')}</label>
               <div className="form-row three-columns">
