@@ -171,7 +171,6 @@ return [
             ['date' => '2027-11-30', 'name' => 'Bonifacio Day', 'type' => 'Regular Holiday'],
             ['date' => '2027-12-25', 'name' => 'Christmas Day', 'type' => 'Regular Holiday'],
             ['date' => '2027-12-30', 'name' => 'Rizal Day', 'type' => 'Regular Holiday'],
-            ['date' => '2027-01-02', 'name' => 'Additional Special Non-Working Day', 'type' => 'Special Non-Working Day'],
             ['date' => '2027-02-06', 'name' => 'Chinese New Year', 'type' => 'Special Non-Working Day'],
             ['date' => '2027-03-27', 'name' => 'Black Saturday', 'type' => 'Special Non-Working Day'],
             ['date' => '2027-08-21', 'name' => 'Ninoy Aquino Day', 'type' => 'Special Non-Working Day'],
