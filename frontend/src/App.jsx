@@ -43,7 +43,7 @@ const resetStartupSession = () => {
     })
   return startupSessionReset
 }
-const initialForm = { first_name: '', last_name: '', middle_initial: '', birthday: '', email: '', mobile_number: '', country: 'Philippines', house_street: '', city: '', state: '', region_code: '', city_code: '', zip_code: '', password: '', password_confirmation: '' }
+const initialForm = { first_name: '', last_name: '', middle_initial: '', birthday: '', email: '', mobile_number: '', country: '', house_street: '', city: '', state: '', region_code: '', city_code: '', zip_code: '', password: '', password_confirmation: '' }
 const manilaDateParts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
 }).formatToParts(new Date()).map(({ type, value }) => [type, value]))
@@ -64,6 +64,7 @@ function App() {
   const [selectedDate, setSelectedDate] = useState(() => sessionToday)
   const [holidays, setHolidays] = useState([])
   const [holidayErrors, setHolidayErrors] = useState({})
+  const [holidayNotices, setHolidayNotices] = useState({})
   const [accounts, setAccounts] = useState([])
   const [accountsLoading, setAccountsLoading] = useState(true)
   const [accountsError, setAccountsError] = useState('')
@@ -88,7 +89,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('Holidays')
   const year = displayDate.getFullYear()
   const month = displayDate.getMonth()
-  const selectedCountry = registrationCountries.find((country) => country.name === form.country) || registrationCountries.find((country) => country.shortName === 'PH')
+  const selectedCountry = registrationCountries.find((country) => country.name === form.country)
   const selectedCountryCode = selectedCountry?.shortName || 'PH'
   const stateOptions = statesByCountry[selectedCountryCode] || []
   const countryStatesLoaded = Object.hasOwn(statesByCountry, selectedCountryCode)
@@ -102,7 +103,7 @@ function App() {
     && cityOptions.length === 0
   const countryCityOptions = cityOptions.length > 0 ? cityOptions : cityUsesRegionFallback ? [form.state] : []
   const phCityOptions = phAddressData.citiesByParent[form.region_code] || []
-  const phPostalOptions = phAddressData.postalCodesByCity[form.city_code] || []
+  const phPostalOptions = [...new Map((phAddressData.postalCodesByCity[form.city_code] || []).map((postal) => [postal.postalCode, postal])).values()]
   const startupAuth = modal === 'auth' && !user
 
   function getFieldError(name, value, nextForm, input) {
@@ -261,6 +262,12 @@ function App() {
           ...current.filter((item) => !item.date.startsWith(`${year}-`)),
           ...data.holidays,
         ])
+        setHolidayNotices((current) => {
+          const next = { ...current }
+          if (typeof data.notice === 'string') next[year] = data.notice
+          else delete next[year]
+          return next
+        })
         setHolidayErrors((current) => {
           const next = { ...current }
           delete next[year]
@@ -395,6 +402,18 @@ function App() {
     setModal(name)
   }
 
+  function openAuth(mode) {
+    setAuthMode(mode)
+    setForm(initialForm)
+    setFieldErrors({})
+    setNotice('')
+    setVerificationCode('')
+    setPhoneHint('')
+    setPasswordVisible(false)
+    setConfirmPasswordVisible(false)
+    setModal('auth')
+  }
+
   async function submitAuth(event) {
     event.preventDefault()
     if (!validateAuthForm(event.currentTarget)) return
@@ -511,7 +530,7 @@ function App() {
           <a className="nav-link" href="#settings">Settings</a>
           <a className="nav-link" href="#holiday-module" onClick={(event) => { event.preventDefault(); setActiveTab('Holidays'); openModal('guide') }}>Standard Philippine Holidays Module</a>
         </nav>
-        <div className="top-actions">{user ? <div className="user-menu" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setProfileMenuOpen(false) }}><button className="user-avatar" aria-label="Open your account menu" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((current) => !current)}>{user.first_name?.[0] || user.name?.[0] || 'U'}</button>{profileMenuOpen && <div className="profile-dropdown" role="menu"><button role="menuitem" onClick={() => { setProfileMenuOpen(false); signOut() }}><LogOut size={15} />Logout</button></div>}</div> : <button className="button button-small button-outline" onClick={() => { setAuthMode('login'); openModal('auth') }}>Sign in <ArrowUpRight size={15} /></button>}<button className="mobile-menu" aria-label="Open menu" onClick={() => openModal('menu')}><Menu size={21} /></button></div>
+        <div className="top-actions">{user ? <div className="user-menu" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setProfileMenuOpen(false) }}><button className="user-avatar" aria-label="Open your account menu" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((current) => !current)}>{user.first_name?.[0] || user.name?.[0] || 'U'}</button>{profileMenuOpen && <div className="profile-dropdown" role="menu"><button role="menuitem" onClick={() => { setProfileMenuOpen(false); signOut() }}><LogOut size={15} />Logout</button></div>}</div> : <button className="button button-small button-outline" onClick={() => openAuth('login')}>Sign in <ArrowUpRight size={15} /></button>}<button className="mobile-menu" aria-label="Open menu" onClick={() => openModal('menu')}><Menu size={21} /></button></div>
       </header>}
 
       {!startupAuth && <main id="home">
@@ -583,8 +602,8 @@ function App() {
               {fieldError('password')}
             </div>
             {authMode === 'register' && <><div className="password-rules"><span className={form.password.length >= 12 ? 'rule-passed' : ''}><Check size={13} />12+ characters</span><span className={/[A-Z]/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One uppercase</span><span className={/[a-z]/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One lowercase</span><span className={/\d/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One number</span><span className={/[^A-Za-z0-9]/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One symbol</span></div><label>Confirm password<span className="password-field"><input name="password_confirmation" type={confirmPasswordVisible ? 'text' : 'password'} autoComplete="new-password" required value={form.password_confirmation} onChange={(event) => updateFormField('password_confirmation', event.target.value, event.currentTarget)} placeholder="Enter your password again" /><button type="button" onClick={() => setConfirmPasswordVisible((current) => !current)} aria-label={confirmPasswordVisible ? 'Hide confirm password' : 'Show confirm password'}>{confirmPasswordVisible ? <EyeOff size={17} /> : <Eye size={17} />}</button></span>{fieldError('password_confirmation')}</label></>}
-            {authMode === 'verify' && <label>Six-digit code{phoneHint && <span className="optional">Sent to the number ending in {phoneHint}</span>}<input name="code" inputMode="numeric" autoComplete="one-time-code" required pattern="[0-9]{6}" maxLength="6" value={verificationCode} onChange={(event) => updateVerificationCode(event.target.value)} placeholder="000000" />{fieldError('code')}</label>}
-            {notice && <div className="form-notice" role="status"><CircleHelp size={16} />{notice}</div>}<button className="button button-primary submit-button" disabled={busy}>{busy ? 'One moment…' : authMode === 'register' ? 'Create your account' : authMode === 'verify' ? 'Verify number & sign in' : 'Sign in'}<ArrowRight size={16} /></button>{authMode === 'verify' ? <button type="button" className="resend-button" onClick={resendCode} disabled={busy || resendIn > 0}>Resend OTP</button> : <p className="auth-switch">{authMode === 'register' ? 'Already have an account?' : 'New to Daymark?'} <button type="button" onClick={() => { setAuthMode(authMode === 'register' ? 'login' : 'register'); setNotice(''); setFieldErrors({}) }}>{authMode === 'register' ? 'Sign in' : 'Create an account'}</button></p>}<div className="secure-note"><LockKeyhole size={13} />Your personal information is securely protected.</div>
+            {authMode === 'verify' && <div className="verification-code-field"><label htmlFor="verification-code">Six-digit code</label>{phoneHint && <span id="verification-phone-hint" className="optional">Sent to the number ending in {phoneHint}</span>}<input id="verification-code" name="code" inputMode="numeric" autoComplete="one-time-code" aria-describedby={phoneHint ? 'verification-phone-hint' : undefined} required pattern="[0-9]{6}" maxLength="6" value={verificationCode} onChange={(event) => updateVerificationCode(event.target.value)} placeholder="000000" />{fieldError('code')}</div>}
+            {notice && <div className="form-notice" role="status"><CircleHelp size={16} />{notice}</div>}<button className="button button-primary submit-button" disabled={busy}>{busy ? 'One moment…' : authMode === 'register' ? 'Create your account' : authMode === 'verify' ? 'Verify number & sign in' : 'Sign in'}<ArrowRight size={16} /></button>{authMode === 'verify' ? <button type="button" className="resend-button" onClick={resendCode} disabled={busy || resendIn > 0}>Resend OTP</button> : <p className="auth-switch">{authMode === 'register' ? 'Already have an account?' : 'New to Daymark?'} <button type="button" onClick={() => openAuth(authMode === 'register' ? 'login' : 'register')}>{authMode === 'register' ? 'Sign in' : 'Create an account'}</button></p>}<div className="secure-note"><LockKeyhole size={13} />Your personal information is securely protected.</div>
           </form>}
           {modal === 'guide' && <>
             <div className="modal-tabs" role="tablist" aria-label="Dashboard views">
@@ -602,6 +621,7 @@ function App() {
                 </div>
               </div>
               {holidayErrors[year] && <p className="data-error" role="alert">{holidayErrors[year]}</p>}
+              {holidayNotices[year] && <p className="data-notice" role="note">{holidayNotices[year]}</p>}
               <div className="holiday-calendar">
                 <div className="weekday-row">{weekdays.map((day) => <span key={day}>{day}</span>)}</div>
                 <div className="days-grid">{calendarDays.map(({ date, key, inMonth, holiday }) => {

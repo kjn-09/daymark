@@ -24,7 +24,9 @@ Route::get('/email/verify/{id}/{hash}', function (Request $request, string $id, 
         $user->markEmailAsVerified();
     }
 
-    return redirect($request->getSchemeAndHttpHost().'/?verified=1');
+    return response()->view('email-verified', [
+        'returnUrl' => $request->getSchemeAndHttpHost().'/',
+    ]);
 })->middleware('signed')->name('verification.verify');
 
 Route::get('/account/unlock/{id}', function (Request $request, string $id) {

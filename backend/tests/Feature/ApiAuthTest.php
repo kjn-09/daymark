@@ -97,7 +97,12 @@ class ApiAuthTest extends TestCase
         $this->assertStringStartsWith('https://localhost/email/verify/'.$user->id.'/', $verificationUrl);
         $this->assertStringNotContainsString('&amp;', $verificationUrl);
 
-        $this->withServerVariables($trustedHttpsProxy)->get($verificationUrl)->assertRedirect();
+        $this->withServerVariables($trustedHttpsProxy)
+            ->get($verificationUrl)
+            ->assertOk()
+            ->assertSee('Your account has been verified.')
+            ->assertSee('Your email address has been verified.')
+            ->assertSee('Go back to Daymark');
         $this->assertNotNull($user->fresh()->email_verified_at);
     }
 
@@ -180,7 +185,9 @@ class ApiAuthTest extends TestCase
         $this->assertStringStartsWith('https://daymark-test.onrender.com/email/verify/'.$user->id.'/', $verificationUrl);
         $this->withServerVariables($trustedHttpsProxy)
             ->get($verificationUrl)
-            ->assertRedirect('https://daymark-test.onrender.com/?verified=1');
+            ->assertOk()
+            ->assertSee('href="https://daymark-test.onrender.com/"', false)
+            ->assertSee('Your account has been verified.');
         $this->assertNotNull($user->fresh()->email_verified_at);
     }
 
@@ -352,6 +359,49 @@ class ApiAuthTest extends TestCase
                 array_column($enumValues, 'enumlabel'),
             );
         }
+
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            $columns = collect(DB::select('PRAGMA table_info(verification_tokens)'))
+                ->keyBy('name');
+            $this->assertSame('TIMESTAMP', $columns['expires_at']->type);
+
+            $tableDefinition = DB::selectOne(
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'verification_tokens'",
+            )->sql;
+            $this->assertStringContainsString(
+                "CHECK (type IN ('email_verify', 'mobile_otp', 'password_reset', 'account_unlock'))",
+                $tableDefinition,
+            );
+        }
+    }
+
+    public function test_sqlite_verification_token_type_only_accepts_defined_values(): void
+    {
+        if (DB::connection()->getDriverName() !== 'sqlite') {
+            $this->markTestSkipped('SQLite enum constraints require SQLite.');
+        }
+
+        $user = User::factory()->create();
+        foreach (['email_verify', 'mobile_otp', 'password_reset', 'account_unlock'] as $type) {
+            DB::table('verification_tokens')->insert([
+                'id' => (string) Str::uuid(),
+                'user_id' => $user->id,
+                'token_hash' => hash('sha256', $type),
+                'type' => $type,
+                'expires_at' => now()->addMinutes(5),
+            ]);
+        }
+
+        $this->assertSame(4, DB::table('verification_tokens')->where('user_id', $user->id)->count());
+        $this->expectException(\Illuminate\Database\QueryException::class);
+
+        DB::table('verification_tokens')->insert([
+            'id' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'token_hash' => hash('sha256', 'invalid'),
+            'type' => 'invalid',
+            'expires_at' => now()->addMinutes(5),
+        ]);
     }
 
     public function test_postgresql_schema_matches_the_specification(): void
