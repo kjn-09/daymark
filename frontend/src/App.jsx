@@ -660,7 +660,7 @@ function App() {
                 <h3>{monthNames[month]} holidays</h3>
                 {monthHolidays.length ? monthHolidays.map((holiday) => {
                   const date = new Date(`${holiday.date}T00:00:00`)
-                  return <div className="guide-row" key={holiday.date}><span className="guide-date">{date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' })}</span><strong>{holiday.name}</strong><span className={`holiday-tag holiday-tag-${holidayTypeClass(holiday.type)}`}>{holiday.type}</span></div>
+                  return <div className="guide-row" key={`${holiday.date}-${holiday.name}`}><span className="guide-date">{date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' })}</span><strong>{holiday.name}</strong><span className={`holiday-tag holiday-tag-${holidayTypeClass(holiday.type)}`}>{holiday.type}</span></div>
                 }) : <p className="empty-holidays">No holidays this month.</p>}
               </div>
             </div> : <div className="accounts-view">
