@@ -2,6 +2,7 @@
 
 return [
     'country' => 'PH',
+    'public_holidays_url' => 'https://date.nager.at/api/v3/PublicHolidays',
     'min_year' => 2020,
     'max_year' => 2027,
     'years' => [

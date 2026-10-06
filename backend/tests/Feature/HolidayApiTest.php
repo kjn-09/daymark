@@ -4,15 +4,29 @@ namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Http\Client\Request;
 use Tests\TestCase;
 
 class HolidayApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function fakeNagerApi(): void
+    {
+        Http::fake(function (Request $request) {
+            preg_match('/\/(\d{4})\/PH$/', $request->url(), $matches);
+            $year = $matches[1] ?? '2020';
+
+            return Http::response([
+                ['date' => "{$year}-01-01", 'name' => "New Year's Day", 'types' => ['Public']],
+                ['date' => "{$year}-01-02", 'name' => 'Incorrect extra holiday', 'types' => ['Public']],
+            ]);
+        });
+    }
+
     public function test_all_supported_years_return_the_configured_holiday_reference(): void
     {
-        Http::preventStrayRequests();
+        $this->fakeNagerApi();
 
         $expectedDates = [
             2020 => '01-01,01-25,02-25,04-09,04-10,04-11,05-01,05-25,06-12,07-31,08-21,08-31,11-01,11-02,11-30,12-08,12-24,12-25,12-30,12-31',
@@ -30,7 +44,7 @@ class HolidayApiTest extends TestCase
                 ->assertOk()
                 ->assertJsonPath('country', 'PH')
                 ->assertJsonPath('year', $year)
-                ->assertJsonPath('source', 'Configured Philippine holiday reference calendar')
+                ->assertJsonPath('source', 'Configured Philippine reference calendar corrected against Nager.Date')
                 ->json('holidays');
 
             $actualMonthDays = array_map(
@@ -42,13 +56,48 @@ class HolidayApiTest extends TestCase
                 $actualMonthDays,
                 "Holiday date inventory differs for {$year}.",
             );
+
+            Http::assertSent(fn (Request $request): bool => $request->url() === "https://date.nager.at/api/v3/PublicHolidays/{$year}/PH");
         }
 
-        Http::assertNothingSent();
+        Http::assertSentCount(count($expectedDates));
+    }
+
+    public function test_reference_calendar_is_used_when_the_api_fails(): void
+    {
+        Http::fake([
+            'date.nager.at/*' => Http::response(['message' => 'Unavailable'], 503),
+        ]);
+
+        $this->getJson('/api/holidays/2020')
+            ->assertOk()
+            ->assertJsonPath('source', 'Configured Philippine reference calendar (Nager.Date unavailable)')
+            ->assertJsonFragment([
+                'date' => '2020-04-09',
+                'name' => 'Araw ng Kagitingan & Maundy Thursday',
+                'type' => 'Regular Holiday',
+            ]);
+    }
+
+    public function test_matching_api_date_inventory_is_reported_as_corroborated(): void
+    {
+        $holidays = config('philippine_holidays.years.2020');
+        Http::fake([
+            'date.nager.at/*' => Http::response(array_map(
+                fn (array $holiday): array => ['date' => $holiday['date'], 'name' => $holiday['name']],
+                $holidays,
+            )),
+        ]);
+
+        $this->getJson('/api/holidays/2020')
+            ->assertOk()
+            ->assertJsonPath('source', 'Configured Philippine reference calendar corroborated by Nager.Date');
     }
 
     public function test_special_dates_and_categories_match_the_reference_list(): void
     {
+        $this->fakeNagerApi();
+
         $this->getJson('/api/holidays/2020')
             ->assertJsonFragment(['date' => '2020-04-09', 'name' => 'Araw ng Kagitingan & Maundy Thursday', 'type' => 'Regular Holiday'])
             ->assertJsonFragment(['date' => '2020-11-02', 'name' => "All Souls' Day", 'type' => 'Special Non-Working Day'])
@@ -82,6 +131,8 @@ class HolidayApiTest extends TestCase
 
     public function test_2027_eid_estimates_are_included_and_marked_estimated(): void
     {
+        $this->fakeNagerApi();
+
         $this->getJson('/api/holidays/2027')
             ->assertOk()
             ->assertJsonPath('notice', "The 2027 Eid'l Fitr and Eid'l Adha dates are estimates, as identified in the holiday reference list, and are not confirmed by presidential proclamation.")
@@ -102,7 +153,7 @@ class HolidayApiTest extends TestCase
 
     public function test_years_outside_the_supported_range_are_rejected(): void
     {
-        Http::preventStrayRequests();
+        Http::fake();
 
         $this->getJson('/api/holidays/2019')->assertNotFound();
         $this->getJson('/api/holidays/2028')->assertNotFound();
