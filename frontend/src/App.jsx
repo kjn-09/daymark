@@ -91,6 +91,11 @@ function App() {
   const month = displayDate.getMonth()
   const selectedCountry = registrationCountries.find((country) => country.name === form.country)
   const selectedCountryCode = selectedCountry?.shortName || 'PH'
+  const passwordMeetsRequirements = form.password.length >= 12
+    && /[A-Z]/.test(form.password)
+    && /[a-z]/.test(form.password)
+    && /\d/.test(form.password)
+    && /[^A-Za-z0-9]/.test(form.password)
   const stateOptions = statesByCountry[selectedCountryCode] || []
   const countryStatesLoaded = Object.hasOwn(statesByCountry, selectedCountryCode)
   const cityKey = `${selectedCountryCode}:${form.state}`
@@ -532,7 +537,14 @@ function App() {
     const randomBytes = crypto.getRandomValues(new Uint8Array(16))
     const password = `Daymark!${Array.from(randomBytes, (byte) => alphabet[byte % alphabet.length]).join('')}A7`
     setForm((current) => ({ ...current, password, password_confirmation: password }))
-    setPasswordVisible(true)
+    setFieldErrors((current) => {
+      const nextErrors = { ...current }
+      delete nextErrors.password
+      delete nextErrors.password_confirmation
+      return nextErrors
+    })
+    setPasswordVisible(false)
+    setConfirmPasswordVisible(false)
   }
 
   const years = Array.from(
@@ -618,12 +630,12 @@ function App() {
                 {authMode === 'register' && <button type="button" className="generate-link" onClick={generatePassword}><Sparkles size={13} />Suggest strong password</button>}
               </div>
               <span className="password-field">
-                <input id="account-password" name="password" type={passwordVisible ? 'text' : 'password'} autoComplete={authMode === 'register' ? 'new-password' : 'current-password'} required minLength={authMode === 'register' ? 12 : 1} value={form.password} onChange={(event) => updateFormField('password', event.target.value, event.currentTarget)} placeholder={authMode === 'register' ? 'At least 12 characters' : 'Your password'} />
+                <input id="account-password" name="password" className={authMode === 'register' && passwordMeetsRequirements && !fieldErrors.password ? 'password-valid' : ''} type={passwordVisible ? 'text' : 'password'} autoComplete={authMode === 'register' ? 'new-password' : 'current-password'} required minLength={authMode === 'register' ? 12 : 1} value={form.password} onChange={(event) => updateFormField('password', event.target.value, event.currentTarget)} placeholder={authMode === 'register' ? 'At least 12 characters' : 'Your password'} />
                 <button type="button" onClick={() => setPasswordVisible((current) => !current)} aria-label={passwordVisible ? 'Hide password' : 'Show password'}>{passwordVisible ? <EyeOff size={17} /> : <Eye size={17} />}</button>
               </span>
               {fieldError('password')}
             </div>
-            {authMode === 'register' && <><div className="password-rules"><span className={form.password.length >= 12 ? 'rule-passed' : ''}><Check size={13} />12+ characters</span><span className={/[A-Z]/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One uppercase</span><span className={/[a-z]/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One lowercase</span><span className={/\d/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One number</span><span className={/[^A-Za-z0-9]/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One symbol</span></div><label>Confirm password<span className="password-field"><input name="password_confirmation" type={confirmPasswordVisible ? 'text' : 'password'} autoComplete="new-password" required value={form.password_confirmation} onChange={(event) => updateFormField('password_confirmation', event.target.value, event.currentTarget)} placeholder="Enter your password again" /><button type="button" onClick={() => setConfirmPasswordVisible((current) => !current)} aria-label={confirmPasswordVisible ? 'Hide confirm password' : 'Show confirm password'}>{confirmPasswordVisible ? <EyeOff size={17} /> : <Eye size={17} />}</button></span>{fieldError('password_confirmation')}</label></>}
+            {authMode === 'register' && <><div className="password-rules"><span className={form.password.length >= 12 ? 'rule-passed' : ''}><Check size={13} />12+ characters</span><span className={/[A-Z]/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One uppercase</span><span className={/[a-z]/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One lowercase</span><span className={/\d/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One number</span><span className={/[^A-Za-z0-9]/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One symbol</span></div><label>Confirm password<span className="password-field"><input name="password_confirmation" className={form.password_confirmation && form.password_confirmation === form.password && !fieldErrors.password_confirmation ? 'password-valid' : ''} type={confirmPasswordVisible ? 'text' : 'password'} autoComplete="new-password" required value={form.password_confirmation} onChange={(event) => updateFormField('password_confirmation', event.target.value, event.currentTarget)} placeholder="Enter your password again" /><button type="button" onClick={() => setConfirmPasswordVisible((current) => !current)} aria-label={confirmPasswordVisible ? 'Hide confirm password' : 'Show confirm password'}>{confirmPasswordVisible ? <EyeOff size={17} /> : <Eye size={17} />}</button></span>{fieldError('password_confirmation')}</label></>}
             {authMode === 'verify' && <div className="verification-code-field"><label htmlFor="verification-code">Six-digit code</label>{phoneHint && <span id="verification-phone-hint" className="optional">Sent to the number ending in {phoneHint}</span>}<input id="verification-code" name="code" inputMode="numeric" autoComplete="one-time-code" aria-describedby={phoneHint ? 'verification-phone-hint' : undefined} required pattern="[0-9]{6}" maxLength="6" value={verificationCode} onChange={(event) => updateVerificationCode(event.target.value)} placeholder="000000" />{fieldError('code')}</div>}
             {notice && <div className="form-notice" role="status"><CircleHelp size={16} />{notice}</div>}<button className="button button-primary submit-button" disabled={busy}>{busy ? 'One moment…' : authMode === 'register' ? 'Create your account' : authMode === 'verify' ? 'Verify number & sign in' : 'Sign in'}<ArrowRight size={16} /></button>{authMode === 'verify' ? <button type="button" className="resend-button" onClick={resendCode} disabled={busy || resendIn > 0}>Resend OTP</button> : <p className="auth-switch">{authMode === 'register' ? 'Already have an account?' : 'New to Daymark?'} <button type="button" onClick={() => openAuth(authMode === 'register' ? 'login' : 'register')}>{authMode === 'register' ? 'Sign in' : 'Create an account'}</button></p>}<div className="secure-note"><LockKeyhole size={13} />Your personal information is securely protected.</div>
           </form>}

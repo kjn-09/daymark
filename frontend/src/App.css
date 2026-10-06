@@ -474,6 +474,7 @@ body, .app-shell { background: #f7f5f9; }
 .auth-screen .form-notice { border-color: #e8e3ed; color: #594675; background: #f8f5fc; }
 .auth-screen .field-error { color: #a12b39; }
 .auth-screen .auth-form label:has(.field-error) input, .auth-screen .auth-form label:has(.field-error) select, .auth-screen .password-control:has(.field-error) input { border-color: #bd4c52; }
+.auth-screen .auth-form input.password-valid { border-color: #2f8a54; }
 .auth-screen .auth-modal.auth-register {
   width: min(940px, calc(100vw - 48px));
   height: auto;
