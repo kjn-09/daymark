@@ -565,11 +565,11 @@ main { width: 100%; max-width: none; padding: 0; }
 .mobile-nav-list a { color: #494151; }
 @media (max-width: 820px) {
   main { padding: 0; }
-  .welcome-banner { min-height: calc(100vh - 61px); }
+  .welcome-banner { min-height: calc(100vh - 61px); min-height: calc(100dvh - 61px); }
   .welcome-copy { padding: clamp(30px, 8vw, 64px); }
 }
 @media (max-width: 650px) {
-  .welcome-banner { min-height: calc(100svh - 61px); }
+  .welcome-banner { min-height: calc(100vh - 61px); min-height: calc(100dvh - 61px); }
   .welcome-copy { padding: 34px 24px; }
   .welcome-copy h1 { font-size: clamp(40px, 12vw, 56px); }
   .modal-backdrop:not(.auth-screen) { align-items: center; }
