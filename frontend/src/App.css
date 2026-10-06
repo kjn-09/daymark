@@ -557,6 +557,7 @@ main { width: 100%; max-width: none; padding: 0; }
 .guide-holiday-list h3 { margin: 0 0 7px; color: var(--ink); font-size: 14px; }
 .guide-row { grid-template-columns: 72px minmax(0, 1fr) auto; }
 .guide-row > strong { font-size: 12px; }
+.estimated-label { color: var(--muted); font-size: 10px; font-style: italic; font-weight: 500; }
 .empty-holidays { padding: 14px 0; margin: 0; color: var(--muted); font-size: 12px; }
 .data-error { padding: 11px 13px; border: 1px solid #e5bfc5; border-radius: 4px; color: #8b2738; background: #fff5f6; font-size: 12px; }
 .data-notice { padding: 11px 13px; border: 1px solid #e3d8f1; border-radius: 4px; color: #59476f; background: #faf7fd; font-size: 12px; line-height: 1.5; }

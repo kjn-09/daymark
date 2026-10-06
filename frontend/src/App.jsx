@@ -648,7 +648,7 @@ function App() {
                 <div className="weekday-row">{weekdays.map((day) => <span key={day}>{day}</span>)}</div>
                 <div className="days-grid">{calendarDays.map(({ date, key, inMonth, holiday }) => {
                   const holidayClass = holiday ? holidayTypeClass(holiday.type) : ''
-                  return <button key={key} className={`day-cell${inMonth ? '' : ' outside'}${date.toDateString() === selectedDate.toDateString() ? ' selected' : ''}${holiday ? ' has-holiday' : ''}`} onClick={() => setSelectedDate(date)} aria-label={`${monthNames[date.getMonth()]} ${date.getDate()}${holiday ? `, ${holiday.name}, ${holiday.type}` : ''}`}><span className={`day-number${holiday ? ` day-number-${holidayClass}` : ''}`}>{date.getDate()}</span>{holiday && <span className={`day-dot day-dot-${holidayClass}`} />}</button>
+                  return <button key={key} className={`day-cell${inMonth ? '' : ' outside'}${date.toDateString() === selectedDate.toDateString() ? ' selected' : ''}${holiday ? ' has-holiday' : ''}`} onClick={() => setSelectedDate(date)} aria-label={`${monthNames[date.getMonth()]} ${date.getDate()}${holiday ? `, ${holiday.name}${holiday.estimated ? ', estimated' : ''}, ${holiday.type}` : ''}`}><span className={`day-number${holiday ? ` day-number-${holidayClass}` : ''}`}>{date.getDate()}</span>{holiday && <span className={`day-dot day-dot-${holidayClass}`} />}</button>
                 })}</div>
               </div>
               <div className="calendar-legend" aria-label="Holiday categories">
@@ -660,7 +660,7 @@ function App() {
                 <h3>{monthNames[month]} holidays</h3>
                 {monthHolidays.length ? monthHolidays.map((holiday) => {
                   const date = new Date(`${holiday.date}T00:00:00`)
-                  return <div className="guide-row" key={`${holiday.date}-${holiday.name}`}><span className="guide-date">{date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' })}</span><strong>{holiday.name}</strong><span className={`holiday-tag holiday-tag-${holidayTypeClass(holiday.type)}`}>{holiday.type}</span></div>
+                  return <div className="guide-row" key={`${holiday.date}-${holiday.name}`}><span className="guide-date">{date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' })}</span><strong>{holiday.name}{holiday.estimated && <span className="estimated-label"> (Estimated)</span>}</strong><span className={`holiday-tag holiday-tag-${holidayTypeClass(holiday.type)}`}>{holiday.type}</span></div>
                 }) : <p className="empty-holidays">No holidays this month.</p>}
               </div>
             </div> : <div className="accounts-view">

@@ -3,8 +3,6 @@
 namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\Client\Request as ClientRequest;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -12,166 +10,103 @@ class HolidayApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_fetches_sorts_and_classifies_external_public_holidays(): void
+    public function test_all_supported_years_return_the_configured_holiday_reference(): void
     {
-        config(['philippine_holidays.calendarific.key' => '']);
         Http::preventStrayRequests();
-        Http::fake([
-            'https://date.nager.at/api/v3/PublicHolidays/2026/PH' => Http::response([
-                ['date' => '2026-12-25', 'name' => 'Christmas Day', 'localName' => 'Pasko', 'types' => ['Public']],
-                ['date' => '2026-02-17', 'name' => 'Chinese New Year', 'localName' => 'Bagong Taon ng Tsino', 'types' => ['Public']],
-                ['date' => '2026-03-20', 'name' => 'Eid al-Fitr', 'localName' => "Eid'l Fitr", 'types' => ['Public']],
-                ['date' => '2026-11-02', 'name' => 'All Souls Day', 'types' => ['Observance']],
-            ]),
-        ]);
 
-        $this->getJson('/api/holidays/2026')
-            ->assertOk()
-            ->assertExactJson([
-                'country' => 'PH',
-                'year' => 2026,
-                'source' => 'Nager.Date public holiday API with Eid dates reconciled to official Philippine proclamations',
-                'holidays' => [
-                    ['date' => '2026-02-17', 'name' => 'Chinese New Year', 'type' => 'Special Non-Working Day'],
-                    ['date' => '2026-03-20', 'name' => "Eid'l Fitr", 'type' => 'Islamic Holiday'],
-                    ['date' => '2026-05-27', 'name' => "Eid'l Adha", 'type' => 'Islamic Holiday'],
-                    ['date' => '2026-12-25', 'name' => 'Christmas Day', 'type' => 'Regular Holiday'],
-                ],
-            ]);
+        $expectedDates = [
+            2020 => '01-01,01-25,02-25,04-09,04-10,04-11,05-01,05-25,06-12,07-31,08-21,08-31,11-01,11-02,11-30,12-08,12-24,12-25,12-30,12-31',
+            2021 => '01-01,02-12,02-25,04-01,04-02,04-03,04-09,05-01,05-13,06-12,07-20,08-21,08-30,11-01,11-30,12-08,12-25,12-30',
+            2022 => '01-01,02-01,02-25,04-09,04-14,04-15,04-16,05-01,05-03,05-09,06-12,07-09,08-21,08-29,11-01,11-30,12-08,12-25,12-30',
+            2023 => '01-01,01-02,01-22,02-24,04-06,04-07,04-08,04-10,04-21,05-01,06-12,06-28,08-21,08-28,11-01,11-02,11-27,12-08,12-25,12-30,12-31',
+            2024 => '01-01,02-09,02-10,03-28,03-29,03-30,04-09,05-01,06-12,06-17,08-23,08-26,11-01,11-02,11-30,12-08,12-24,12-25,12-30,12-31',
+            2025 => '01-01,01-29,04-01,04-09,04-17,04-18,04-19,05-01,06-06,06-12,08-21,08-25,10-31,11-01,11-30,12-08,12-24,12-25,12-30,12-31',
+            2026 => '01-01,02-17,03-20,04-02,04-03,04-04,04-09,05-01,05-27,06-12,08-21,08-31,11-01,11-02,11-30,12-08,12-24,12-25,12-30,12-31',
+            2027 => '01-01,01-02,02-06,03-10,03-25,03-26,03-27,04-09,05-01,05-17,06-12,08-21,08-30,11-01,11-02,11-30,12-08,12-24,12-25,12-30,12-31',
+        ];
 
-        Http::assertSent(fn (ClientRequest $request): bool => $request->url() === 'https://date.nager.at/api/v3/PublicHolidays/2026/PH');
+        foreach ($expectedDates as $year => $monthDays) {
+            $holidays = $this->getJson("/api/holidays/{$year}")
+                ->assertOk()
+                ->assertJsonPath('country', 'PH')
+                ->assertJsonPath('year', $year)
+                ->assertJsonPath('source', 'Configured Philippine holiday reference calendar')
+                ->json('holidays');
+
+            $actualMonthDays = array_map(
+                fn (string $date): string => substr($date, 5),
+                array_column($holidays, 'date'),
+            );
+            $this->assertSame(
+                explode(',', $monthDays),
+                $actualMonthDays,
+                "Holiday date inventory differs for {$year}.",
+            );
+        }
+
+        Http::assertNothingSent();
     }
 
-    public function test_calendarific_fills_a_missing_eid_when_nager_returns_the_other_eid(): void
+    public function test_special_dates_and_categories_match_the_reference_list(): void
     {
-        Cache::store('file')->forget('holidays:calendarific:PH:2024');
-        config(['philippine_holidays.calendarific.key' => 'test-calendarific-key']);
-        Http::preventStrayRequests();
-        Http::fake([
-            'https://date.nager.at/api/v3/PublicHolidays/2024/PH' => Http::response([
-                ['date' => '2024-06-17', 'name' => 'Eid al-Adha', 'types' => ['Public']],
-            ]),
-            'https://calendarific.com/api/v2/holidays*' => Http::response([
-                'response' => [
-                    'holidays' => [
-                        ['name' => 'Eid al-Fitr (Tentative)', 'date' => ['iso' => '2024-04-10T00:00:00+08:00']],
-                        ['name' => 'Eid al-Adha', 'date' => ['iso' => '2024-06-18T00:00:00+08:00']],
-                        ['name' => 'Eid al-Adha (Day 2)', 'date' => ['iso' => '2024-06-18T00:00:00+08:00']],
-                    ],
-                ],
-            ]),
-        ]);
+        $this->getJson('/api/holidays/2020')
+            ->assertJsonFragment(['date' => '2020-04-09', 'name' => 'Araw ng Kagitingan & Maundy Thursday', 'type' => 'Regular Holiday'])
+            ->assertJsonFragment(['date' => '2020-11-02', 'name' => "All Souls' Day", 'type' => 'Special Non-Working Day'])
+            ->assertJsonMissing(['date' => '2020-10-31']);
 
-        $this->getJson('/api/holidays/2024')
-            ->assertOk()
-            ->assertJsonPath('notice', null)
-            ->assertJsonFragment([
-                'date' => '2024-04-10',
-                'name' => 'Eid al-Fitr',
-                'type' => 'Islamic Holiday',
-            ])
-            ->assertJsonFragment([
-                'date' => '2024-06-17',
-                'name' => "Eid'l Adha",
-                'type' => 'Islamic Holiday',
-            ])
-            ->assertJsonMissing(['date' => '2024-06-18']);
+        $this->getJson('/api/holidays/2021')
+            ->assertJsonMissing(['date' => '2021-11-02'])
+            ->assertJsonMissing(['date' => '2021-12-24'])
+            ->assertJsonMissing(['date' => '2021-12-31']);
 
-        Http::assertSentCount(2);
-        Http::assertSent(fn (ClientRequest $request): bool => str_starts_with($request->url(), 'https://calendarific.com/api/v2/holidays?'));
-    }
-
-    public function test_returns_502_when_the_public_holiday_api_cannot_return_data(): void
-    {
-        Http::preventStrayRequests();
-        Http::fake([
-            'https://date.nager.at/api/v3/PublicHolidays/2024/PH' => Http::response([], 503),
-        ]);
-
-        $this->getJson('/api/holidays/2024')
-            ->assertStatus(502)
-            ->assertExactJson(['message' => 'No holiday data was returned for 2024.']);
-    }
-
-    public function test_verified_eids_are_present_when_calendarific_is_not_configured(): void
-    {
-        config(['philippine_holidays.calendarific.key' => '']);
-        Http::preventStrayRequests();
-        Http::fake([
-            'https://date.nager.at/api/v3/PublicHolidays/2023/PH' => Http::response([
-                ['date' => '2023-12-25', 'name' => 'Christmas Day', 'types' => ['Public']],
-            ]),
-        ]);
+        $this->getJson('/api/holidays/2022')
+            ->assertJsonFragment(['date' => '2022-05-09', 'name' => 'Special National Election Day', 'type' => 'Regular Holiday'])
+            ->assertJsonMissing(['date' => '2022-12-31']);
 
         $this->getJson('/api/holidays/2023')
-            ->assertOk()
-            ->assertJsonPath('holidays', [
-                ['date' => '2023-04-21', 'name' => "Eid'l Fitr", 'type' => 'Islamic Holiday'],
-                ['date' => '2023-06-28', 'name' => "Eid'l Adha", 'type' => 'Islamic Holiday'],
-                ['date' => '2023-12-25', 'name' => 'Christmas Day', 'type' => 'Regular Holiday'],
-            ])
-            ->assertJsonMissingPath('notice');
+            ->assertJsonFragment(['date' => '2023-02-24', 'name' => 'EDSA People Power Revolution Anniversary', 'type' => 'Special Non-Working Day'])
+            ->assertJsonFragment(['date' => '2023-11-27', 'name' => 'Bonifacio Day', 'type' => 'Regular Holiday'])
+            ->assertJsonMissing(['date' => '2023-02-25'])
+            ->assertJsonMissing(['date' => '2023-11-30']);
 
-        Http::assertSentCount(1);
+        $this->getJson('/api/holidays/2024')
+            ->assertJsonFragment(['date' => '2024-04-09', 'name' => "Araw ng Kagitingan & Eid'l Fitr", 'type' => 'Regular Holiday'])
+            ->assertJsonFragment(['date' => '2024-08-23', 'name' => 'Ninoy Aquino Day', 'type' => 'Special Non-Working Day'])
+            ->assertJsonMissing(['date' => '2024-08-21']);
+
+        $this->getJson('/api/holidays/2025')
+            ->assertJsonFragment(['date' => '2025-04-01', 'name' => "Eid'l Fitr", 'type' => 'Regular Holiday'])
+            ->assertJsonFragment(['date' => '2025-10-31', 'name' => "All Saints' Day Eve", 'type' => 'Special Non-Working Day'])
+            ->assertJsonMissing(['date' => '2025-11-02']);
     }
 
-    public function test_verified_eids_remain_available_when_calendarific_fails(): void
+    public function test_2027_eid_estimates_are_included_and_marked_estimated(): void
     {
-        Cache::store('file')->forget('holidays:calendarific:PH:2020');
-        config(['philippine_holidays.calendarific.key' => 'test-calendarific-key']);
-        Http::preventStrayRequests();
-        Http::fake([
-            'https://date.nager.at/api/v3/PublicHolidays/2020/PH' => Http::response([
-                ['date' => '2020-07-31', 'name' => "Eid'l Adha", 'types' => ['Public']],
-            ]),
-            'https://calendarific.com/api/v2/holidays*' => Http::response([], 503),
-        ]);
-
-        $this->getJson('/api/holidays/2020')
-            ->assertOk()
-            ->assertJsonFragment([
-                'date' => '2020-05-25',
-                'name' => "Eid'l Fitr",
-                'type' => 'Islamic Holiday',
-            ])
-            ->assertJsonFragment([
-                'date' => '2020-07-31',
-                'name' => "Eid'l Adha",
-                'type' => 'Islamic Holiday',
-            ])
-            ->assertJsonMissingPath('notice');
-
-        Http::assertSentCount(2);
-    }
-
-    public function test_unproclaimed_2027_eid_estimates_are_excluded_with_a_notice(): void
-    {
-        Http::preventStrayRequests();
-        Http::fake([
-            'https://date.nager.at/api/v3/PublicHolidays/2027/PH' => Http::response([
-                ['date' => '2027-03-10', 'name' => 'Eid al-Fitr', 'types' => ['Public']],
-                ['date' => '2027-05-17', 'name' => 'Eid al-Adha', 'types' => ['Public']],
-                ['date' => '2027-12-25', 'name' => 'Christmas Day', 'types' => ['Public']],
-            ]),
-        ]);
-
         $this->getJson('/api/holidays/2027')
             ->assertOk()
-            ->assertJsonPath('notice', "The official 2027 proclamation says Eid'l Fitr and Eid'l Adha dates will be declared separately. They are not included until officially proclaimed.")
-            ->assertJsonMissing(['type' => 'Islamic Holiday'])
-            ->assertJsonPath('holidays.0', [
-                'date' => '2027-12-25',
-                'name' => 'Christmas Day',
+            ->assertJsonPath('notice', "The 2027 Eid'l Fitr and Eid'l Adha dates are estimates, as identified in the holiday reference list, and are not confirmed by presidential proclamation.")
+            ->assertJsonFragment([
+                'date' => '2027-03-10',
+                'name' => "Eid'l Fitr",
                 'type' => 'Regular Holiday',
-            ]);
+                'estimated' => true,
+            ])
+            ->assertJsonFragment([
+                'date' => '2027-05-17',
+                'name' => "Eid'l Adha",
+                'type' => 'Regular Holiday',
+                'estimated' => true,
+            ])
+            ->assertJsonFragment(['date' => '2027-01-02', 'type' => 'Special Non-Working Day']);
     }
 
-    public function test_returns_404_for_years_outside_the_required_range(): void
+    public function test_years_outside_the_supported_range_are_rejected(): void
     {
         Http::preventStrayRequests();
 
         $this->getJson('/api/holidays/2019')->assertNotFound();
         $this->getJson('/api/holidays/2028')->assertNotFound();
+
         Http::assertNothingSent();
     }
 }
