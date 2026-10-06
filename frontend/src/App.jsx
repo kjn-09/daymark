@@ -568,7 +568,9 @@ function App() {
               </div>
               <label>House &amp; street<input name="house_street" autoComplete="street-address" required maxLength="255" pattern="[\p{L}\p{M}\p{N}\s.,#'\/()-]+" value={form.house_street} onChange={(event) => updateFormField('house_street', event.target.value, event.currentTarget)} placeholder="House number, street, and barangay" />{fieldError('house_street')}</label>
               <div className="form-row three-columns">
-                {selectedCountryCode === 'PH'
+                {!selectedCountry
+                  ? <label>State<select name="state" autoComplete="address-level1" required disabled value=""><option value="">Select a country first</option></select>{fieldError('state')}</label>
+                  : selectedCountryCode === 'PH'
                   ? <label>State<select name="state" autoComplete="address-level1" required value={form.region_code} onChange={(event) => {
                     const region = phAddressData.regions.find((item) => item.psgcCode === event.target.value)
                     updateFormField('state', region?.name || '', event.currentTarget, ['city', 'zip_code', 'city_code'])

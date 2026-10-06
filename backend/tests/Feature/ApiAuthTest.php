@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Support\LocalJsonStore;
 use Carbon\Carbon;
 use Illuminate\Auth\Notifications\VerifyEmail;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\DB;
@@ -393,7 +394,7 @@ class ApiAuthTest extends TestCase
         }
 
         $this->assertSame(4, DB::table('verification_tokens')->where('user_id', $user->id)->count());
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
 
         DB::table('verification_tokens')->insert([
             'id' => (string) Str::uuid(),
@@ -607,6 +608,31 @@ class ApiAuthTest extends TestCase
             'password' => 'SafePassword!482',
             'password_confirmation' => 'SafePassword!482',
         ])->assertUnprocessable()->assertJsonValidationErrors('mobile_number');
+    }
+
+    public function test_registration_stores_the_canonical_country_for_the_country_code(): void
+    {
+        Notification::fake();
+
+        $this->postJson('/api/register', [
+            'first_name' => 'Maria',
+            'last_name' => 'Santos',
+            'birthday' => '04/17/1995',
+            'email' => 'maria.santos@gmail.com',
+            'mobile_number' => '+6591234567',
+            'country' => 'Philippines',
+            'country_code' => 'SG',
+            'house_street' => '12 Sampaguita Street',
+            'city' => 'Singapore',
+            'state' => 'Singapore',
+            'zip_code' => '018956',
+            'password' => 'SafePassword!482',
+            'password_confirmation' => 'SafePassword!482',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('addresses', [
+            'country' => 'Singapore',
+        ]);
     }
 
     public function test_registration_rejects_a_postal_code_for_the_wrong_country(): void

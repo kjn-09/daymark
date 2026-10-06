@@ -91,6 +91,9 @@ class AuthController extends Controller
             throw ValidationException::withMessages(['email' => 'Use a personal email address from a supported public email provider.']);
         }
 
+        $country = (new CountryRepository)->get($data['country_code']);
+        $data['country'] = $country->getName();
+
         $phoneUtil = PhoneNumberUtil::getInstance();
 
         try {
