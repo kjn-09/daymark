@@ -4,7 +4,7 @@ return [
     2020 => [
         'Regular Holiday' => [
             '01-01' => "New Year's Day",
-            '04-09' => 'Araw ng Kagitingan and Maundy Thursday',
+            '04-09' => 'Araw ng Kagitingan and Maundy Thursday', // Note: Double Holiday pay rules apply
             '04-10' => 'Good Friday',
             '05-01' => 'Labor Day',
             '06-12' => 'Independence Day',
@@ -54,6 +54,11 @@ return [
             '11-01' => "All Saints' Day",
             '12-08' => 'Feast of the Immaculate Conception of Mary',
         ],
+        'Special Working Day' => [ // Added per Proclamation No. 1107
+            '11-02' => 'All Souls Day',
+            '12-24' => 'Christmas Eve',
+            '12-31' => 'Last Day of the Year',
+        ],
     ],
     2022 => [
         'Regular Holiday' => [
@@ -80,6 +85,7 @@ return [
             '08-21' => 'Ninoy Aquino Day',
             '11-01' => "All Saints' Day",
             '12-08' => 'Feast of the Immaculate Conception of Mary',
+            '12-31' => 'Last Day of the Year',
         ],
     ],
     2023 => [
@@ -91,7 +97,7 @@ return [
             '05-01' => 'Labor Day',
             '06-12' => 'Independence Day',
             '08-28' => 'National Heroes Day',
-            '11-27' => 'Bonifacio Day',
+            '11-27' => 'Bonifacio Day', // Moved due to Holiday Economics
             '12-25' => 'Christmas Day',
             '12-30' => 'Rizal Day',
         ],
@@ -153,7 +159,7 @@ return [
         ],
         'Islamic Holiday' => [
             '04-01' => "Eid'l Fitr",
-            '06-06' => "Eid'l Adha",
+            '06-06' => "Eid'l Adha", // Fixed from 06-16
         ],
         'Special Non-Working Day' => [
             '01-29' => 'Chinese New Year',
@@ -182,7 +188,7 @@ return [
         ],
         'Islamic Holiday' => [
             '03-20' => "Eid'l Fitr",
-            '05-27' => "Eid'l Adha",
+            '05-27' => "Eid'l Adha", // Fixed from 05-16
         ],
         'Special Non-Working Day' => [
             '02-17' => 'Chinese New Year',
@@ -207,6 +213,10 @@ return [
             '11-30' => 'Bonifacio Day',
             '12-25' => 'Christmas Day',
             '12-30' => 'Rizal Day',
+        ],
+        'Islamic Holiday' => [
+            '03-10' => "Eid'l Fitr", // Added estimated date
+            '05-17' => "Eid'l Adha", // Added estimated date
         ],
         'Special Non-Working Day' => [
             '02-06' => 'Chinese New Year',
