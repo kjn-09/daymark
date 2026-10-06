@@ -384,7 +384,13 @@ function App() {
     return () => window.clearTimeout(timer)
   }, [resendIn])
 
-  const monthHolidays = useMemo(() => holidays.filter((item) => item.date.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`)).sort((a, b) => a.date.localeCompare(b.date)), [holidays, month, year])
+  const visibleMonth = `${year}-${String(month + 1).padStart(2, '0')}`
+  const monthHolidays = useMemo(
+    () => holidays
+      .filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item.date) && item.date.slice(0, 7) === visibleMonth)
+      .sort((a, b) => a.date.localeCompare(b.date)),
+    [holidays, visibleMonth],
+  )
   const calendarDays = useMemo(() => {
     const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7
     const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -398,11 +404,16 @@ function App() {
   }, [holidays, month, year])
 
   function changeMonth(amount) {
-    setDisplayDate((current) => {
-      const next = new Date(current.getFullYear(), current.getMonth() + amount, 1)
-      if (next.getFullYear() < firstHolidayYear || next.getFullYear() > lastHolidayYear) return current
-      return next
-    })
+    const next = new Date(year, month + amount, 1)
+    if (next.getFullYear() < firstHolidayYear || next.getFullYear() > lastHolidayYear) return
+    setDisplayDate(next)
+    setSelectedDate(next)
+  }
+
+  function changeYear(nextYear) {
+    const next = new Date(nextYear, month, 1)
+    setDisplayDate(next)
+    setSelectedDate(next)
   }
 
   function openModal(name) {
@@ -628,7 +639,7 @@ function App() {
                   <button className="icon-button" aria-label="Previous month" disabled={year === firstHolidayYear && month === 0} onClick={() => changeMonth(-1)}><ChevronLeft size={18} /></button>
                   <span>{monthNames[month]} {year}</span>
                   <button className="icon-button" aria-label="Next month" disabled={year === lastHolidayYear && month === 11} onClick={() => changeMonth(1)}><ChevronRight size={18} /></button>
-                  <select aria-label="Holiday year" value={year} onChange={(event) => setDisplayDate(new Date(Number(event.target.value), month, 1))}>{years.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+                  <select aria-label="Holiday year" value={year} onChange={(event) => changeYear(Number(event.target.value))}>{years.map((item) => <option key={item} value={item}>{item}</option>)}</select>
                 </div>
               </div>
               {holidayErrors[year] && <p className="data-error" role="alert">{holidayErrors[year]}</p>}
