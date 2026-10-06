@@ -163,8 +163,6 @@ class AuthController extends Controller
             throw ValidationException::withMessages(['email' => self::INVALID_CREDENTIALS]);
         }
 
-        $this->clearExpiredLoginLock($user);
-
         if ($user->is_locked) {
             return response()->json(['message' => self::LOGIN_LOCKOUT_MESSAGE], 423);
         }
@@ -333,17 +331,6 @@ class AuthController extends Controller
         return response()->json([
             'user' => $user->load('address'),
         ]);
-    }
-
-    private function clearExpiredLoginLock(User $user): void
-    {
-        if ($user->is_locked && $user->lockout_until && ! $user->lockout_until->isFuture()) {
-            $user->forceFill([
-                'failed_login_attempts' => 0,
-                'is_locked' => false,
-                'lockout_until' => null,
-            ])->save();
-        }
     }
 
     private function sendMobileCode(User $user): array

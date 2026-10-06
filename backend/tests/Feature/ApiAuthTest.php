@@ -619,7 +619,7 @@ class ApiAuthTest extends TestCase
         ]);
     }
 
-    public function test_three_failed_logins_start_a_two_minute_lockout_that_expires_automatically(): void
+    public function test_locked_account_requires_unlock_email_link_after_two_minute_hold(): void
     {
         $this->freezeTime();
         $lockoutMessage = 'Your account has been temporarily locked. An unlock email has been sent to your registered email address. Please check your inbox.';
@@ -699,13 +699,24 @@ class ApiAuthTest extends TestCase
         $this->get($unlockUrlMatches[0])->assertRedirect();
         $this->assertTrue($user->fresh()->is_locked);
 
-        $this->travel(1)->day();
+        $this->travel(2)->minutes();
 
-        $expiredLockLoginResponse = $this->postJson('/api/login', [
+        $stillLockedLoginResponse = $this->postJson('/api/login', [
             'email' => $user->email,
             'password' => 'SafePassword!482',
         ]);
-        $expiredLockLoginResponse->assertOk();
+        $stillLockedLoginResponse->assertStatus(423)->assertExactJson([
+            'message' => $lockoutMessage,
+        ]);
+        $this->assertTrue($user->fresh()->is_locked);
+
+        $this->get($unlockUrlMatches[0])->assertRedirect();
+        $this->assertFalse($user->fresh()->is_locked);
+
+        $this->postJson('/api/login', [
+            'email' => $user->email,
+            'password' => 'SafePassword!482',
+        ])->assertOk();
         $this->assertFalse($user->fresh()->is_locked);
         $this->assertSame(0, $user->fresh()->failed_login_attempts);
     }
