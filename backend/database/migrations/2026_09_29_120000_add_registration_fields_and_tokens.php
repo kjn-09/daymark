@@ -15,7 +15,7 @@ return new class extends Migration
             $table->date('birthday')->after('middle_initial');
             $table->string('mobile_number', 20)->unique()->after('password');
             $table->boolean('mobile_verified')->default(false)->after('mobile_number');
-            $table->unsignedTinyInteger('failed_login_attempts')->default(0);
+            $table->integer('failed_login_attempts')->default(0);
             $table->boolean('is_locked')->default(false);
             $table->timestamp('locked_until')->nullable();
         });

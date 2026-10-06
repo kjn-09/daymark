@@ -32,6 +32,17 @@ const csrfHeaders = async () => {
   if (!response.ok || typeof data.token !== 'string') throw new Error('Could not start a secure session. Please try again.')
   return { 'X-CSRF-TOKEN': data.token }
 }
+let startupSessionReset
+const resetStartupSession = () => {
+  startupSessionReset ??= csrfHeaders().then((headers) => api('/logout', { method: 'POST', headers }))
+    .then(async (response) => {
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.message || 'Could not end your previous session.')
+      }
+    })
+  return startupSessionReset
+}
 const initialForm = { first_name: '', last_name: '', middle_initial: '', birthday: '', email: '', mobile_number: '', country: 'Philippines', house_street: '', city: '', state: '', region_code: '', city_code: '', zip_code: '', password: '', password_confirmation: '' }
 const manilaDateParts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -56,15 +67,14 @@ function App() {
   const [accounts, setAccounts] = useState([])
   const [accountsLoading, setAccountsLoading] = useState(true)
   const [accountsError, setAccountsError] = useState('')
-  const [user, setUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('daymark_user') || 'null') } catch { return null }
-  })
-  const [modal, setModal] = useState(() => initialStatus || !user ? 'auth' : null)
+  const [user, setUser] = useState(null)
+  const [modal, setModal] = useState('auth')
   const [authMode, setAuthMode] = useState('login')
+  const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false)
   const [form, setForm] = useState(initialForm)
   const [fieldErrors, setFieldErrors] = useState({})
   const [notice, setNotice] = useState(initialNotice)
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState(true)
   const [verificationCode, setVerificationCode] = useState('')
   const [phoneHint, setPhoneHint] = useState('')
   const [resendIn, setResendIn] = useState(0)
@@ -210,25 +220,16 @@ function App() {
   useEffect(() => {
     let active = true
     localStorage.removeItem('daymark_token')
-    api('/me')
-      .then(async (response) => {
-        if (response.status === 401) {
-          localStorage.removeItem('daymark_user')
-          if (active) {
-            setUser(null)
-            setModal((current) => current ?? 'auth')
-          }
-          return
-        }
-        if (!response.ok) throw new Error('Could not restore your session.')
-        const data = await response.json()
-        if (!active) return
-        setUser(data)
-        localStorage.setItem('daymark_user', JSON.stringify(data))
-        setModal((current) => current === 'auth' ? null : current)
+    localStorage.removeItem('daymark_user')
+    resetStartupSession()
+      .then(() => {
+        if (active) setNotice(initialNotice)
       })
       .catch((error) => {
-        if (active) setNotice(error.message || 'Could not restore your session.')
+        if (active) setNotice(error.message || 'Could not end your previous session.')
+      })
+      .finally(() => {
+        if (active) setBusy(false)
       })
 
     return () => { active = false }
@@ -403,7 +404,6 @@ function App() {
         setForm(initialForm)
         setFieldErrors({})
       } else {
-        localStorage.setItem('daymark_user', JSON.stringify(data.user))
         setUser(data.user)
         setModal(null)
         setForm(initialForm)
@@ -551,7 +551,7 @@ function App() {
               </span>
               {fieldError('password')}
             </div>
-            {authMode === 'register' && <><div className="password-rules"><span className={form.password.length >= 12 ? 'rule-passed' : ''}><Check size={13} />12+ characters</span><span className={/[A-Z]/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One uppercase</span><span className={/[a-z]/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One lowercase</span><span className={/\d/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One number</span><span className={/[^A-Za-z0-9]/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One symbol</span></div><label>Confirm password<input name="password_confirmation" type="password" autoComplete="new-password" required value={form.password_confirmation} onChange={(event) => updateFormField('password_confirmation', event.target.value, event.currentTarget)} placeholder="Enter your password again" />{fieldError('password_confirmation')}</label></>}
+            {authMode === 'register' && <><div className="password-rules"><span className={form.password.length >= 12 ? 'rule-passed' : ''}><Check size={13} />12+ characters</span><span className={/[A-Z]/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One uppercase</span><span className={/[a-z]/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One lowercase</span><span className={/\d/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One number</span><span className={/[^A-Za-z0-9]/.test(form.password) ? 'rule-passed' : ''}><Check size={13} />One symbol</span></div><label>Confirm password<span className="password-field"><input name="password_confirmation" type={confirmPasswordVisible ? 'text' : 'password'} autoComplete="new-password" required value={form.password_confirmation} onChange={(event) => updateFormField('password_confirmation', event.target.value, event.currentTarget)} placeholder="Enter your password again" /><button type="button" onClick={() => setConfirmPasswordVisible((current) => !current)} aria-label={confirmPasswordVisible ? 'Hide confirm password' : 'Show confirm password'}>{confirmPasswordVisible ? <EyeOff size={17} /> : <Eye size={17} />}</button></span>{fieldError('password_confirmation')}</label></>}
             {authMode === 'verify' && <label>Six-digit code{phoneHint && <span className="optional">Sent to the number ending in {phoneHint}</span>}<input name="code" inputMode="numeric" autoComplete="one-time-code" required pattern="[0-9]{6}" maxLength="6" value={verificationCode} onChange={(event) => updateVerificationCode(event.target.value)} placeholder="000000" />{fieldError('code')}</label>}
             {notice && <div className="form-notice" role="status"><CircleHelp size={16} />{notice}</div>}<button className="button button-primary submit-button" disabled={busy}>{busy ? 'One moment…' : authMode === 'register' ? 'Create your account' : authMode === 'verify' ? 'Verify number & sign in' : 'Sign in'}<ArrowRight size={16} /></button>{authMode === 'verify' ? <button type="button" className="resend-button" onClick={resendCode} disabled={busy || resendIn > 0}>Resend OTP</button> : <p className="auth-switch">{authMode === 'register' ? 'Already have an account?' : 'New to Daymark?'} <button type="button" onClick={() => { setAuthMode(authMode === 'register' ? 'login' : 'register'); setNotice(''); setFieldErrors({}) }}>{authMode === 'register' ? 'Sign in' : 'Create an account'}</button></p>}<div className="secure-note"><LockKeyhole size={13} />Your personal information is securely protected.</div>
           </form>}
@@ -602,7 +602,6 @@ function App() {
             <a href="#profile" onClick={() => setModal(null)}><Users size={17} />Profile</a>
             <a href="#settings" onClick={() => setModal(null)}><LockKeyhole size={17} />Settings</a>
             <a href="#holiday-module" onClick={(event) => { event.preventDefault(); setActiveTab('Holidays'); openModal('guide') }}><CalendarDays size={17} />Standard Philippine Holidays Module</a>
-            <button onClick={signOut}><LogOut size={17} />Logout</button>
           </nav>}
         </section></div>}
     </div>

@@ -294,7 +294,9 @@ class ApiAuthTest extends TestCase
             $this->postJson('/api/register', [])->assertUnprocessable();
         }
 
-        $this->postJson('/api/register', [])->assertTooManyRequests();
+        $this->postJson('/api/register', [])
+            ->assertTooManyRequests()
+            ->assertJsonPath('message', 'Registration limit has been hit. Please wait for an hour and try to register again.');
 
         $this->travel(61)->minutes();
 
@@ -331,13 +333,190 @@ class ApiAuthTest extends TestCase
 
         if (DB::connection()->getDriverName() === 'pgsql') {
             $enumValues = DB::select(
-                "SELECT enumlabel FROM pg_enum JOIN pg_type ON pg_enum.enumtypid = pg_type.oid WHERE pg_type.typname = 'verification_token_type' ORDER BY enumsortorder",
+                "SELECT enumlabel
+                 FROM pg_enum
+                 JOIN pg_type ON pg_enum.enumtypid = pg_type.oid
+                 JOIN pg_namespace ON pg_type.typnamespace = pg_namespace.oid
+                 WHERE pg_type.typname = 'verification_token_type'
+                   AND pg_namespace.nspname = current_schema()
+                 ORDER BY enumsortorder",
             );
             $this->assertSame(
                 ['email_verify', 'mobile_otp', 'password_reset', 'account_unlock'],
                 array_column($enumValues, 'enumlabel'),
             );
         }
+    }
+
+    public function test_postgresql_schema_matches_the_specification(): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('PostgreSQL information_schema assertions require PostgreSQL.');
+        }
+
+        $columns = DB::select(
+            "SELECT table_name, column_name, data_type, character_maximum_length, is_nullable, column_default
+             FROM information_schema.columns
+             WHERE table_schema = current_schema()
+               AND table_name IN ('users', 'addresses', 'verification_tokens')
+             ORDER BY CASE table_name
+                 WHEN 'users' THEN 1
+                 WHEN 'addresses' THEN 2
+                 ELSE 3
+             END, ordinal_position",
+        );
+
+        $actualColumns = array_map(
+            fn (object $column): array => [
+                $column->table_name,
+                $column->column_name,
+                $column->data_type,
+                $column->character_maximum_length === null ? null : (int) $column->character_maximum_length,
+                $column->is_nullable,
+                $column->column_default,
+            ],
+            $columns,
+        );
+
+        $expectedColumnDefinitions = [
+            'users' => [
+                ['id', 'uuid', null, 'NO', null],
+                ['name', 'character varying', 255, 'NO', null],
+                ['first_name', 'character varying', 50, 'NO', null],
+                ['last_name', 'character varying', 50, 'NO', null],
+                ['middle_initial', 'character varying', 2, 'YES', null],
+                ['birthday', 'date', null, 'NO', null],
+                ['email', 'character varying', 255, 'NO', null],
+                ['email_verified_at', 'timestamp without time zone', null, 'YES', null],
+                ['password', 'character varying', 255, 'NO', null],
+                ['mobile_number', 'character varying', 20, 'NO', null],
+                ['mobile_verified', 'boolean', null, 'NO', 'false'],
+                ['failed_login_attempts', 'integer', null, 'NO', '0'],
+                ['is_locked', 'boolean', null, 'NO', 'false'],
+                ['locked_until', 'timestamp without time zone', null, 'YES', null],
+                ['remember_token', 'character varying', 100, 'YES', null],
+                ['created_at', 'timestamp without time zone', null, 'YES', null],
+                ['updated_at', 'timestamp without time zone', null, 'YES', null],
+            ],
+            'addresses' => [
+                ['id', 'uuid', null, 'NO', null],
+                ['user_id', 'uuid', null, 'NO', null],
+                ['house_street', 'character varying', 255, 'NO', null],
+                ['country', 'character varying', 100, 'NO', null],
+                ['city', 'character varying', 100, 'NO', null],
+                ['state', 'character varying', 100, 'NO', null],
+                ['zip_code', 'character varying', 20, 'NO', null],
+                ['created_at', 'timestamp without time zone', null, 'YES', null],
+                ['updated_at', 'timestamp without time zone', null, 'YES', null],
+            ],
+            'verification_tokens' => [
+                ['id', 'uuid', null, 'NO', null],
+                ['user_id', 'uuid', null, 'NO', null],
+                ['token_hash', 'character varying', 255, 'NO', null],
+                ['type', 'USER-DEFINED', null, 'NO', null],
+                ['expires_at', 'timestamp without time zone', null, 'NO', null],
+                ['created_at', 'timestamp without time zone', null, 'YES', null],
+                ['updated_at', 'timestamp without time zone', null, 'YES', null],
+            ],
+        ];
+        $expectedColumns = [];
+        foreach ($expectedColumnDefinitions as $table => $definitions) {
+            foreach ($definitions as [$column, $type, $length, $nullable, $default]) {
+                $expectedColumns[] = [$table, $column, $type, $length, $nullable, $default];
+            }
+        }
+
+        $this->assertSame($expectedColumns, $actualColumns);
+
+        $constraints = DB::select(
+            "SELECT table_name, constraint_name, constraint_type
+             FROM information_schema.table_constraints
+             WHERE table_schema = current_schema()
+               AND table_name IN ('users', 'addresses', 'verification_tokens')
+             ORDER BY table_name,
+                 CASE constraint_type
+                     WHEN 'PRIMARY KEY' THEN 1
+                     WHEN 'FOREIGN KEY' THEN 2
+                     WHEN 'UNIQUE' THEN 3
+                     ELSE 4
+                 END,
+                 constraint_name",
+        );
+        $actualConstraints = array_map(
+            fn (object $constraint): array => [
+                $constraint->table_name,
+                $constraint->constraint_name,
+                $constraint->constraint_type,
+            ],
+            $constraints,
+        );
+        $this->assertSame([
+            ['addresses', 'addresses_pkey', 'PRIMARY KEY'],
+            ['addresses', 'addresses_user_id_foreign', 'FOREIGN KEY'],
+            ['addresses', 'addresses_user_id_unique', 'UNIQUE'],
+            ['users', 'users_pkey', 'PRIMARY KEY'],
+            ['users', 'users_email_unique', 'UNIQUE'],
+            ['users', 'users_mobile_number_unique', 'UNIQUE'],
+            ['verification_tokens', 'verification_tokens_pkey', 'PRIMARY KEY'],
+            ['verification_tokens', 'verification_tokens_user_id_foreign', 'FOREIGN KEY'],
+            ['verification_tokens', 'verification_tokens_user_id_unique', 'UNIQUE'],
+        ], $actualConstraints);
+
+        $foreignKeys = DB::select(
+            "SELECT tc.table_name, kcu.column_name, ccu.table_name AS foreign_table_name,
+                    ccu.column_name AS foreign_column_name, rc.delete_rule
+             FROM information_schema.table_constraints tc
+             JOIN information_schema.key_column_usage kcu
+               ON tc.constraint_name = kcu.constraint_name
+              AND tc.constraint_schema = kcu.constraint_schema
+             JOIN information_schema.constraint_column_usage ccu
+               ON ccu.constraint_name = tc.constraint_name
+              AND ccu.constraint_schema = tc.constraint_schema
+             JOIN information_schema.referential_constraints rc
+               ON rc.constraint_name = tc.constraint_name
+              AND rc.constraint_schema = tc.constraint_schema
+             WHERE tc.constraint_schema = current_schema()
+               AND tc.constraint_type = 'FOREIGN KEY'
+               AND tc.table_name IN ('addresses', 'verification_tokens')
+             ORDER BY tc.table_name",
+        );
+        $this->assertSame([
+            ['addresses', 'user_id', 'users', 'id', 'CASCADE'],
+            ['verification_tokens', 'user_id', 'users', 'id', 'CASCADE'],
+        ], array_map(
+            fn (object $foreignKey): array => [
+                $foreignKey->table_name,
+                $foreignKey->column_name,
+                $foreignKey->foreign_table_name,
+                $foreignKey->foreign_column_name,
+                $foreignKey->delete_rule,
+            ],
+            $foreignKeys,
+        ));
+
+        $emailIndexes = DB::select(
+            "SELECT indexname, indexdef FROM pg_indexes
+             WHERE schemaname = current_schema()
+               AND tablename = 'users'
+               AND indexdef LIKE '%(email)%'",
+        );
+        $this->assertCount(1, $emailIndexes);
+        $this->assertStringContainsString('UNIQUE INDEX', strtoupper($emailIndexes[0]->indexdef));
+        $this->assertStringContainsString('(email)', $emailIndexes[0]->indexdef);
+
+        $enumValues = DB::select(
+            "SELECT enumlabel
+             FROM pg_enum
+             JOIN pg_type ON pg_enum.enumtypid = pg_type.oid
+             JOIN pg_namespace ON pg_type.typnamespace = pg_namespace.oid
+             WHERE pg_type.typname = 'verification_token_type'
+               AND pg_namespace.nspname = current_schema()
+             ORDER BY enumsortorder",
+        );
+        $this->assertSame(
+            ['email_verify', 'mobile_otp', 'password_reset', 'account_unlock'],
+            array_column($enumValues, 'enumlabel'),
+        );
     }
 
     public function test_production_rejects_http_requests(): void
@@ -582,6 +761,12 @@ class ApiAuthTest extends TestCase
         $this->assertFalse(Schema::hasTable('api_tokens'));
 
         $this->getJson('/api/me')->assertOk()->assertJsonPath('email', $user->email);
+        $this->postJson('/api/logout')->assertOk();
+        $this->getJson('/api/me')->assertUnauthorized();
+    }
+
+    public function test_logout_succeeds_without_an_authenticated_session(): void
+    {
         $this->postJson('/api/logout')->assertOk();
         $this->getJson('/api/me')->assertUnauthorized();
     }

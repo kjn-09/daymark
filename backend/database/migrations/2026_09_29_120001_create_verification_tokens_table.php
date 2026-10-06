@@ -16,7 +16,7 @@ return new class extends Migration
         Schema::create('verification_tokens', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->foreignUuid('user_id')->unique()->constrained()->cascadeOnDelete();
-            $table->char('token_hash', 64);
+            $table->string('token_hash', 255);
             if (DB::connection()->getDriverName() === 'pgsql') {
                 $table->string('type');
             } else {

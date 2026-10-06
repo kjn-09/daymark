@@ -82,7 +82,7 @@ return new class extends Migration
             $table->string('password');
             $table->string('mobile_number', 20)->unique();
             $table->boolean('mobile_verified')->default(false);
-            $table->unsignedTinyInteger('failed_login_attempts')->default(0);
+            $table->integer('failed_login_attempts')->default(0);
             $table->boolean('is_locked')->default(false);
             $table->timestamp('locked_until')->nullable();
             $table->rememberToken();
@@ -103,7 +103,7 @@ return new class extends Migration
         Schema::create('verification_tokens', function (Blueprint $table): void {
             $table->uuid('id')->primary();
             $table->foreignUuid('user_id')->unique()->constrained()->cascadeOnDelete();
-            $table->char('token_hash', 64);
+            $table->string('token_hash', 255);
             $table->enum('type', ['email_verify', 'mobile_otp', 'password_reset', 'account_unlock']);
             $table->timestamp('expires_at');
             $table->timestamps();

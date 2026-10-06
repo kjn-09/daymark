@@ -29,7 +29,9 @@ class LimitRegistrations
         if ($entry['count'] > 5) {
             $retryAfter = max(1, $entry['expires_at'] - $now);
 
-            return response()->json(['message' => 'Too Many Attempts.'], 429)
+            return response()->json([
+                'message' => 'Registration limit has been hit. Please wait for an hour and try to register again.',
+            ], 429)
                 ->header('Retry-After', (string) $retryAfter);
         }
 
