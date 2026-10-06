@@ -5,6 +5,7 @@ use App\Http\Controllers\HolidayController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register'])->middleware(['web', 'limit.registrations']);
+Route::get('/postal-code-format/{countryCode}', [AuthController::class, 'postalCodeFormat']);
 Route::middleware('web')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/logout', [AuthController::class, 'logout']);

@@ -578,6 +578,18 @@ class ApiAuthTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('zip_code');
     }
 
+    public function test_postal_code_format_endpoint_returns_the_selected_country_format(): void
+    {
+        $this->getJson('/api/postal-code-format/JP')
+            ->assertOk()
+            ->assertExactJson([
+                'country_code' => 'JP',
+                'pattern' => '\d{3}-?\d{4}',
+            ]);
+
+        $this->getJson('/api/postal-code-format/XX')->assertNotFound();
+    }
+
     public function test_registration_accepts_countries_outside_the_previous_short_list(): void
     {
         Notification::fake();
@@ -593,7 +605,7 @@ class ApiAuthTest extends TestCase
             'house_street' => '1 Chome Marunouchi',
             'city' => 'Tokyo',
             'state' => 'Tokyo',
-            'zip_code' => '100-0001',
+            'zip_code' => ' 100-0001 ',
             'password' => 'SafePassword!482',
             'password_confirmation' => 'SafePassword!482',
         ]);

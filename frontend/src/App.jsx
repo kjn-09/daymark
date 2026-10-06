@@ -79,6 +79,7 @@ function App() {
   const [phoneHint, setPhoneHint] = useState('')
   const [resendIn, setResendIn] = useState(0)
   const [registrationCountries, setRegistrationCountries] = useState([])
+  const [postalCodeFormats, setPostalCodeFormats] = useState({})
   const [loadedCities, setLoadedCities] = useState({ key: '', values: [] })
   const [statesByCountry, setStatesByCountry] = useState({})
   const [phAddressData, setPhAddressData] = useState({ regions: [], citiesByParent: {}, postalCodesByCity: {} })
@@ -153,6 +154,16 @@ function App() {
       const parsedNumber = parsePhoneNumberFromString(value, selectedCountryCode)
       if (!parsedNumber?.isPossible()) return 'Check the mobile number length for the selected country.'
       if (!parsedNumber.isValid()) return 'Check the mobile number format for the selected country.'
+    }
+    if (name === 'zip_code') {
+      const format = postalCodeFormats[selectedCountryCode]
+      if (!format) return 'Could not verify the postal code format. Please try again.'
+      if (format.error) return format.error
+      const postalCode = value.trim()
+      const matchesFormat = format.pattern === null
+        ? /^[\p{L}\p{N}][\p{L}\p{N} -]{0,19}$/u.test(postalCode)
+        : new RegExp(`^(?:${format.pattern})$`, 'i').test(postalCode)
+      return matchesFormat ? '' : 'Enter a valid postal code for the selected country.'
     }
     if (input?.validity.tooShort) return `Use at least ${input.minLength} characters.`
     if (input?.validity.tooLong) return `Use no more than ${input.maxLength} characters.`
@@ -292,6 +303,25 @@ function App() {
     import('countrycitystatejson/countries').then(({ getStatesByShort }) => {
       if (active) setStatesByCountry((current) => ({ ...current, [selectedCountryCode]: getStatesByShort(selectedCountryCode) || [] }))
     })
+    return () => { active = false }
+  }, [selectedCountryCode])
+
+  useEffect(() => {
+    let active = true
+    api(`/postal-code-format/${selectedCountryCode}`)
+      .then(async (response) => {
+        const data = await response.json()
+        if (!response.ok || data.country_code !== selectedCountryCode) {
+          throw new Error(data.message || 'Could not verify the postal code format. Please try again.')
+        }
+        if (active) setPostalCodeFormats((current) => ({ ...current, [selectedCountryCode]: data }))
+      })
+      .catch((error) => {
+        if (active) setPostalCodeFormats((current) => ({
+          ...current,
+          [selectedCountryCode]: { error: error.message || 'Could not verify the postal code format. Please try again.' },
+        }))
+      })
     return () => { active = false }
   }, [selectedCountryCode])
 

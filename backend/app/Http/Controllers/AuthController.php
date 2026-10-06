@@ -30,6 +30,19 @@ class AuthController extends Controller
 
     public function __construct(private readonly LocalJsonStore $localState) {}
 
+    public function postalCodeFormat(string $countryCode): JsonResponse
+    {
+        $countryCode = strtoupper($countryCode);
+        if (! array_key_exists($countryCode, (new CountryRepository)->getList())) {
+            abort(404);
+        }
+
+        return response()->json([
+            'country_code' => $countryCode,
+            'pattern' => (new AddressFormatRepository)->get($countryCode)->getPostalCodePattern(),
+        ]);
+    }
+
     public function register(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -99,6 +112,8 @@ class AuthController extends Controller
         if (! $postalCodeIsValid) {
             throw ValidationException::withMessages(['zip_code' => 'Enter a valid postal code for the selected country.']);
         }
+
+        $data['zip_code'] = $postalCode;
 
         $mobileNumber = $phoneUtil->format($parsedMobileNumber, PhoneNumberFormat::E164);
 
