@@ -569,14 +569,14 @@ function App() {
               <label>House &amp; street<input name="house_street" autoComplete="street-address" required maxLength="255" pattern="[\p{L}\p{M}\p{N}\s.,#'\/()-]+" value={form.house_street} onChange={(event) => updateFormField('house_street', event.target.value, event.currentTarget)} placeholder="House number, street, and barangay" />{fieldError('house_street')}</label>
               <div className="form-row three-columns">
                 {selectedCountryCode === 'PH'
-                  ? <label>State<select name="state" autoComplete="address-level1" required value={form.region_code} onChange={(event) => {
+                  ? <label>State<select name="state" autoComplete="address-level1" required disabled={!selectedCountry} value={form.region_code} onChange={(event) => {
                     const region = phAddressData.regions.find((item) => item.psgcCode === event.target.value)
                     updateFormField('state', region?.name || '', event.currentTarget, ['city', 'zip_code', 'city_code'])
                     setForm((current) => ({ ...current, region_code: event.target.value, city_code: '', city: '', zip_code: '' }))
                   }}><option value="">Select a state</option>{phAddressData.regions.map((region) => <option key={region.psgcCode} value={region.psgcCode}>{region.name}</option>)}</select>{fieldError('state')}</label>
                   : <label>State{countryStatesLoaded && stateOptions.length === 0
-                    ? <input name="state" autoComplete="address-level1" required maxLength="100" value={form.state} onChange={(event) => updateFormField('state', event.target.value, event.currentTarget)} placeholder="State" />
-                    : <select name="state" autoComplete="address-level1" required value={form.state} onChange={(event) => updateFormField('state', event.target.value, event.currentTarget, ['city'])}><option value="">Select a state</option>{stateOptions.map((state) => <option key={state} value={state}>{state}</option>)}</select>}{fieldError('state')}</label>}
+                    ? <input name="state" autoComplete="address-level1" required disabled={!selectedCountry} maxLength="100" value={form.state} onChange={(event) => updateFormField('state', event.target.value, event.currentTarget)} placeholder="State" />
+                    : <select name="state" autoComplete="address-level1" required disabled={!selectedCountry} value={form.state} onChange={(event) => updateFormField('state', event.target.value, event.currentTarget, ['city'])}><option value="">Select a state</option>{stateOptions.map((state) => <option key={state} value={state}>{state}</option>)}</select>}{fieldError('state')}</label>}
                 <label>City<select name="city" autoComplete="address-level2" required disabled={selectedCountryCode === 'PH' ? !form.region_code || phCityOptions.length === 0 : !form.state || countryCityOptions.length === 0} value={selectedCountryCode === 'PH' ? form.city_code : form.city} onChange={(event) => {
                   if (selectedCountryCode === 'PH') {
                     const city = phCityOptions.find((item) => item.psgcCode === event.target.value)
