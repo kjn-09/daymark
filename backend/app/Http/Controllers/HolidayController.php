@@ -55,17 +55,38 @@ class HolidayController extends Controller
                 'type' => $this->classify((string) $holiday['name'], (string) ($holiday['localName'] ?? '')),
             ]);
 
-        $notice = null;
+        $officialIslamicHolidays = config("philippine_holidays.official_islamic_holidays.{$year}", []);
+        $nagerIslamicTypes = $holidays
+            ->filter(fn (array $holiday): bool => $holiday['type'] === self::ISLAMIC_HOLIDAY)
+            ->map(fn (array $holiday): ?string => $this->islamicHolidayType($holiday['name']))
+            ->filter()
+            ->unique()
+            ->all();
+        $missingIslamicTypes = array_values(array_diff(
+            array_keys($officialIslamicHolidays),
+            $nagerIslamicTypes,
+        ));
 
-        if (! $holidays->contains('type', self::ISLAMIC_HOLIDAY)) {
-            [$islamicHolidays, $notice] = $this->islamicHolidays($year);
-            $holidays = $holidays->concat($islamicHolidays);
-        }
+        $calendarificIslamicHolidays = $missingIslamicTypes !== []
+            ? $this->islamicHolidays($year, $missingIslamicTypes, $officialIslamicHolidays)
+            : [];
+
+        $holidays = $holidays
+            ->reject(fn (array $holiday): bool => $holiday['type'] === self::ISLAMIC_HOLIDAY)
+            ->concat(collect($officialIslamicHolidays)->map(fn (string $date, string $name): array => [
+                'date' => $date,
+                'name' => $calendarificIslamicHolidays[$name]['name'] ?? $name,
+                'type' => self::ISLAMIC_HOLIDAY,
+            ]));
+
+        $notice = $year === 2027
+            ? "The official 2027 proclamation says Eid'l Fitr and Eid'l Adha dates will be declared separately. They are not included until officially proclaimed."
+            : null;
 
         $response = [
             'country' => config('philippine_holidays.country'),
             'year' => $year,
-            'source' => 'Nager.Date public holiday API',
+            'source' => 'Nager.Date public holiday API with Eid dates reconciled to official Philippine proclamations',
             'holidays' => $holidays
                 ->unique(fn (array $holiday): string => $holiday['date'].'|'.$holiday['name'])
                 ->sortBy('date')
@@ -81,24 +102,26 @@ class HolidayController extends Controller
     }
 
     /**
-     * @return array{0: array<int, array{date: string, name: string, type: string}>, 1: ?string}
+     * @param  array<int, string>  $missingTypes
+     * @param  array<string, string>  $officialHolidays
+     * @return array<string, array{date: string, name: string}>
      */
-    private function islamicHolidays(int $year): array
+    private function islamicHolidays(int $year, array $missingTypes, array $officialHolidays): array
     {
         $apiKey = (string) config('philippine_holidays.calendarific.key');
 
         if ($apiKey === '') {
             Log::warning('Calendarific API key is not configured.', ['year' => $year]);
 
-            return [[], 'Islamic holiday data is unavailable right now.'];
+            return [];
         }
 
         $cache = Cache::store('file');
         $cacheKey = 'holidays:calendarific:'.config('philippine_holidays.country').":{$year}";
         $cachedHolidays = $cache->get($cacheKey);
 
-        if (is_array($cachedHolidays) && $cachedHolidays !== []) {
-            return [$cachedHolidays, null];
+        if (is_array($cachedHolidays)) {
+            return $this->matchOfficialIslamicHolidays($cachedHolidays, $missingTypes, $officialHolidays);
         }
 
         try {
@@ -116,7 +139,7 @@ class HolidayController extends Controller
                 'year' => $year,
             ]);
 
-            return [[], 'Islamic holiday data is unavailable right now.'];
+            return [];
         }
 
         $rows = $response->successful() ? $response->json('response.holidays') : null;
@@ -124,29 +147,67 @@ class HolidayController extends Controller
         if (! is_array($rows)) {
             Log::warning('Calendarific holiday API returned an invalid response.', ['status' => $response->status(), 'year' => $year]);
 
-            return [[], 'Islamic holiday data is unavailable right now.'];
+            return [];
         }
 
-        $holidays = collect($rows)
+        $calendarificHolidays = collect($rows)
             ->filter(fn (mixed $holiday): bool => is_array($holiday)
                 && isset($holiday['name'], $holiday['date']['iso'])
                 && $this->isOfficialIslamic((string) $holiday['name']))
             ->map(fn (array $holiday): array => [
                 'date' => substr((string) $holiday['date']['iso'], 0, 10),
-                'name' => trim((string) preg_replace('/\s*\((?:provisional|tentative)[^)]*\)/i', '', (string) $holiday['name'])),
-                'type' => self::ISLAMIC_HOLIDAY,
+                'name' => (string) $holiday['name'],
             ])
             ->unique(fn (array $holiday): string => $holiday['date'].'|'.$holiday['name'])
             ->values()
             ->all();
 
-        if ($holidays === []) {
-            return [[], "No Islamic holiday data was returned for {$year}."];
+        $cache->put($cacheKey, $calendarificHolidays, now()->addHours(6));
+
+        return $this->matchOfficialIslamicHolidays($calendarificHolidays, $missingTypes, $officialHolidays);
+    }
+
+    /**
+     * @param  array<int, array{date: string, name: string}>  $holidays
+     * @param  array<int, string>  $missingTypes
+     * @param  array<string, string>  $officialHolidays
+     * @return array<string, array{date: string, name: string}>
+     */
+    private function matchOfficialIslamicHolidays(array $holidays, array $missingTypes, array $officialHolidays): array
+    {
+        $matched = [];
+
+        foreach ($holidays as $holiday) {
+            $type = $this->islamicHolidayType($holiday['name']);
+
+            if (
+                $type !== null
+                && in_array($type, $missingTypes, true)
+                && ($officialHolidays[$type] ?? null) === $holiday['date']
+            ) {
+                $matched[$type] = [
+                    'date' => $holiday['date'],
+                    'name' => trim((string) preg_replace('/\s*\((?:provisional|tentative)[^)]*\)/i', '', $holiday['name'])),
+                ];
+            }
         }
 
-        $cache->put($cacheKey, $holidays, now()->addHours(6));
+        return $matched;
+    }
 
-        return [$holidays, null];
+    private function islamicHolidayType(string $name): ?string
+    {
+        $letters = preg_replace('/[^a-z]/', '', Str::lower($name));
+
+        if (! str_contains($letters, 'eid')) {
+            return null;
+        }
+
+        return match (true) {
+            str_contains($letters, 'fitr') => "Eid'l Fitr",
+            str_contains($letters, 'adha') => "Eid'l Adha",
+            default => null,
+        };
     }
 
     private function isOfficialIslamic(string $name): bool
@@ -157,10 +218,7 @@ class HolidayController extends Controller
             return false;
         }
 
-        $letters = preg_replace('/[^a-z]/', '', $normalizedName);
-
-        return str_contains($letters, 'eid')
-            && (str_contains($letters, 'fitr') || str_contains($letters, 'adha'));
+        return $this->islamicHolidayType($name) !== null;
     }
 
     /**
