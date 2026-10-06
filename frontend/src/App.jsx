@@ -103,7 +103,16 @@ function App() {
     && cityOptions.length === 0
   const countryCityOptions = cityOptions.length > 0 ? cityOptions : cityUsesRegionFallback ? [form.state] : []
   const phCityOptions = phAddressData.citiesByParent[form.region_code] || []
-  const phPostalOptions = [...new Map((phAddressData.postalCodesByCity[form.city_code] || []).map((postal) => [postal.postalCode, postal])).values()]
+  const caloocanPostalCodes = form.city.toLowerCase().includes('caloocan')
+    ? [
+      { postalCode: '1409', label: 'Kaunlaran Village' },
+      { postalCode: '1411', label: 'Fish Market' },
+    ]
+    : []
+  const phPostalOptions = [...new Map([
+    ...(phAddressData.postalCodesByCity[form.city_code] || []),
+    ...caloocanPostalCodes,
+  ].map((postal) => [postal.postalCode, postal])).values()]
   const startupAuth = modal === 'auth' && !user
 
   function getFieldError(name, value, nextForm, input) {
@@ -577,8 +586,8 @@ function App() {
                     setForm((current) => ({ ...current, region_code: event.target.value, city_code: '', city: '', zip_code: '' }))
                   }}><option value="">Select a state</option>{phAddressData.regions.map((region) => <option key={region.psgcCode} value={region.psgcCode}>{region.name}</option>)}</select>{fieldError('state')}</label>
                   : <label>State{countryStatesLoaded && stateOptions.length === 0
-                    ? <input name="state" autoComplete="address-level1" required maxLength="100" value={form.state} onChange={(event) => updateFormField('state', event.target.value, event.currentTarget)} placeholder="State" />
-                    : <select name="state" autoComplete="address-level1" required value={form.state} onChange={(event) => updateFormField('state', event.target.value, event.currentTarget, ['city'])}><option value="">Select a state</option>{stateOptions.map((state) => <option key={state} value={state}>{state}</option>)}</select>}{fieldError('state')}</label>}
+                    ? <input name="state" autoComplete="address-level1" required disabled={!selectedCountry} maxLength="100" value={form.state} onChange={(event) => updateFormField('state', event.target.value, event.currentTarget)} placeholder="State" />
+                    : <select name="state" autoComplete="address-level1" required disabled={!selectedCountry} value={form.state} onChange={(event) => updateFormField('state', event.target.value, event.currentTarget, ['city'])}><option value="">Select a state</option>{stateOptions.map((state) => <option key={state} value={state}>{state}</option>)}</select>}{fieldError('state')}</label>}
                 <label>City<select name="city" autoComplete="address-level2" required disabled={selectedCountryCode === 'PH' ? !form.region_code || phCityOptions.length === 0 : !form.state || countryCityOptions.length === 0} value={selectedCountryCode === 'PH' ? form.city_code : form.city} onChange={(event) => {
                   if (selectedCountryCode === 'PH') {
                     const city = phCityOptions.find((item) => item.psgcCode === event.target.value)
@@ -588,7 +597,7 @@ function App() {
                     updateFormField('city', event.target.value, event.currentTarget)
                   }
                 }}><option value="">{selectedCountryCode === 'PH' ? 'Select a city' : 'Select a city or region'}</option>{(selectedCountryCode === 'PH' ? phCityOptions.map((city) => ({ value: city.psgcCode, name: city.name })) : countryCityOptions.map((city) => ({ value: city, name: city }))).map((city) => <option key={city.value} value={city.value}>{city.name}</option>)}</select>{fieldError('city')}</label>
-                <label>ZIP code{selectedCountryCode === 'PH' ? <select name="zip_code" autoComplete="postal-code" required disabled={!form.city_code || phPostalOptions.length === 0} value={form.zip_code} onChange={(event) => updateFormField('zip_code', event.target.value, event.currentTarget)}><option value="">Select a ZIP code</option>{phPostalOptions.map((postal, index) => <option key={`${postal.postalCode}-${index}`} value={postal.postalCode}>{postal.postalCode}</option>)}</select> : <input name="zip_code" autoComplete="postal-code" required maxLength="20" value={form.zip_code} onChange={(event) => updateFormField('zip_code', event.target.value.toUpperCase(), event.currentTarget)} placeholder="ZIP / postal code" />}{fieldError('zip_code')}</label>
+                <label>ZIP code{selectedCountryCode === 'PH' ? <select name="zip_code" autoComplete="postal-code" required disabled={!form.city_code || phPostalOptions.length === 0} value={form.zip_code} onChange={(event) => updateFormField('zip_code', event.target.value, event.currentTarget)}><option value="">Select a ZIP code</option>{phPostalOptions.map((postal, index) => <option key={`${postal.postalCode}-${index}`} value={postal.postalCode}>{postal.label ? `${postal.postalCode} — ${postal.label}` : postal.postalCode}</option>)}</select> : <input name="zip_code" autoComplete="postal-code" required maxLength="20" value={form.zip_code} onChange={(event) => updateFormField('zip_code', event.target.value.toUpperCase(), event.currentTarget)} placeholder="ZIP / postal code" />}{fieldError('zip_code')}</label>
               </div>
             </>}
             {authMode !== 'register' && <label>Email address<input name="email" type="email" autoComplete="email" required value={form.email} onChange={(event) => updateFormField('email', event.target.value, event.currentTarget)} placeholder="you@example.com" />{fieldError('email')}</label>}
