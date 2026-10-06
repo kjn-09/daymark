@@ -94,9 +94,12 @@ function App() {
   const cityKey = `${selectedCountryCode}:${form.state}`
   const cityOptions = loadedCities.key === cityKey ? loadedCities.values : []
   const cityOptionsLoaded = loadedCities.key === cityKey
-  const cityNeedsTextInput = selectedCountryCode !== 'PH'
+  const cityUsesRegionFallback = selectedCountryCode !== 'PH'
     && countryStatesLoaded
-    && (stateOptions.length === 0 || (Boolean(form.state) && cityOptionsLoaded && cityOptions.length === 0))
+    && Boolean(form.state)
+    && cityOptionsLoaded
+    && cityOptions.length === 0
+  const countryCityOptions = cityOptions.length > 0 ? cityOptions : cityUsesRegionFallback ? [form.state] : []
   const phCityOptions = phAddressData.citiesByParent[form.region_code] || []
   const phPostalOptions = phAddressData.postalCodesByCity[form.city_code] || []
   const startupAuth = modal === 'auth' && !user
@@ -516,9 +519,7 @@ function App() {
               </div>
               <label>House &amp; street<input name="house_street" autoComplete="street-address" required maxLength="255" pattern="[\p{L}\p{M}\p{N}\s.,#'\/()-]+" value={form.house_street} onChange={(event) => updateFormField('house_street', event.target.value, event.currentTarget)} placeholder="House number, street, and barangay" />{fieldError('house_street')}</label>
               <div className="form-row three-columns">
-                <label>City{cityNeedsTextInput
-                  ? <input name="city" autoComplete="address-level2" required maxLength="100" value={form.city} onChange={(event) => updateFormField('city', event.target.value, event.currentTarget)} placeholder="City" />
-                  : <select name="city" autoComplete="address-level2" required disabled={selectedCountryCode === 'PH' ? !form.region_code || phCityOptions.length === 0 : !form.state || cityOptions.length === 0} value={selectedCountryCode === 'PH' ? form.city_code : form.city} onChange={(event) => {
+                <label>City<select name="city" autoComplete="address-level2" required disabled={selectedCountryCode === 'PH' ? !form.region_code || phCityOptions.length === 0 : !form.state || countryCityOptions.length === 0} value={selectedCountryCode === 'PH' ? form.city_code : form.city} onChange={(event) => {
                   if (selectedCountryCode === 'PH') {
                     const city = phCityOptions.find((item) => item.psgcCode === event.target.value)
                     updateFormField('city', city?.name || '', event.currentTarget, ['zip_code'])
@@ -526,7 +527,7 @@ function App() {
                   } else {
                     updateFormField('city', event.target.value, event.currentTarget)
                   }
-                }}><option value="">Select a city</option>{(selectedCountryCode === 'PH' ? phCityOptions.map((city) => ({ value: city.psgcCode, name: city.name })) : cityOptions.map((city) => ({ value: city, name: city }))).map((city) => <option key={city.value} value={city.value}>{city.name}</option>)}</select>}{fieldError('city')}</label>
+                }}><option value="">{selectedCountryCode === 'PH' ? 'Select a city' : 'Select a city or region'}</option>{(selectedCountryCode === 'PH' ? phCityOptions.map((city) => ({ value: city.psgcCode, name: city.name })) : countryCityOptions.map((city) => ({ value: city, name: city }))).map((city) => <option key={city.value} value={city.value}>{city.name}</option>)}</select>{fieldError('city')}</label>
                 {selectedCountryCode === 'PH'
                   ? <label>State<select name="state" autoComplete="address-level1" required value={form.region_code} onChange={(event) => {
                     const region = phAddressData.regions.find((item) => item.psgcCode === event.target.value)
