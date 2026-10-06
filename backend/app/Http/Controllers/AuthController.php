@@ -108,13 +108,12 @@ class AuthController extends Controller
 
         $user = DB::transaction(function () use ($data, $mobileNumber) {
             $user = User::create([
-                'name' => trim($data['first_name'].' '.$data['last_name']),
                 'first_name' => $data['first_name'],
                 'last_name' => $data['last_name'],
                 'middle_initial' => $data['middle_initial'] ?? null,
                 'birthday' => $data['birthday'],
                 'email' => $data['email'],
-                'password' => $data['password'],
+                'password_hash' => $data['password'],
                 'mobile_number' => $mobileNumber,
             ]);
 
@@ -159,7 +158,7 @@ class AuthController extends Controller
             throw ValidationException::withMessages(['email' => self::INVALID_CREDENTIALS]);
         }
 
-        if (! Hash::check($credentials['password'], $user->password)) {
+        if (! Hash::check($credentials['password'], $user->password_hash)) {
             $attempts = $user->failed_login_attempts + 1;
             $user->forceFill([
                 'failed_login_attempts' => $attempts,
@@ -205,7 +204,7 @@ class AuthController extends Controller
 
         $user = User::where('email', Str::lower($credentials['email']))->first();
 
-        if (! $user || ! Hash::check($credentials['password'], $user->password) || ! $user->hasVerifiedEmail()) {
+        if (! $user || ! Hash::check($credentials['password'], $user->password_hash) || ! $user->hasVerifiedEmail()) {
             throw ValidationException::withMessages(['email' => 'The verification details are invalid.']);
         }
 
@@ -213,7 +212,10 @@ class AuthController extends Controller
             return response()->json(['message' => 'Your account is temporarily locked. Please try again after the two-minute security hold.'], 423);
         }
 
-        $verification = DB::table('verification_tokens')->where('user_id', $user->id)->first();
+        $verification = DB::table('verification_tokens')
+            ->where('user_id', $user->id)
+            ->where('type', 'mobile_otp')
+            ->first();
 
         if (! $verification || Carbon::parse($verification->expires_at)->isPast()) {
             throw ValidationException::withMessages(['code' => 'That code has expired. Request a new one to continue.']);
@@ -270,7 +272,7 @@ class AuthController extends Controller
 
         $user = User::where('email', Str::lower($credentials['email']))->first();
 
-        if (! $user || ! Hash::check($credentials['password'], $user->password) || ! $user->hasVerifiedEmail()) {
+        if (! $user || ! Hash::check($credentials['password'], $user->password_hash) || ! $user->hasVerifiedEmail()) {
             throw ValidationException::withMessages(['email' => 'The verification details are invalid.']);
         }
 
@@ -377,14 +379,11 @@ class AuthController extends Controller
         }
 
         DB::table('verification_tokens')->updateOrInsert(
-            ['user_id' => $user->id],
+            ['user_id' => $user->id, 'type' => 'mobile_otp'],
             [
                 'id' => (string) Str::uuid(),
-                'type' => 'mobile_otp',
                 'token_hash' => hash_hmac('sha256', $code, config('app.key')),
                 'expires_at' => $expiresAt,
-                'created_at' => $now,
-                'updated_at' => $now,
             ],
         );
 
@@ -432,14 +431,11 @@ class AuthController extends Controller
             $now = now();
 
             DB::table('verification_tokens')->updateOrInsert(
-                ['user_id' => $user->id],
+                ['user_id' => $user->id, 'type' => 'account_unlock'],
                 [
                     'id' => (string) Str::uuid(),
                     'token_hash' => hash_hmac('sha256', $token, config('app.key')),
-                    'type' => 'account_unlock',
                     'expires_at' => $now->copy()->addMinutes(15),
-                    'created_at' => $now,
-                    'updated_at' => $now,
                 ],
             );
             $urlGenerator = clone URL::getFacadeRoot();

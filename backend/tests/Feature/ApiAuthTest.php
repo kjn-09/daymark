@@ -203,7 +203,10 @@ class ApiAuthTest extends TestCase
         $this->travel(2)->minutes();
         $this->withServerVariables($proxy)->get($unlockUrl)->assertRedirect('https://localhost/?unlocked=1');
         $this->assertFalse($user->fresh()->is_locked);
-        $this->assertDatabaseMissing('verification_tokens', ['user_id' => $user->id]);
+        $this->assertDatabaseMissing('verification_tokens', [
+            'user_id' => $user->id,
+            'type' => 'account_unlock',
+        ]);
     }
 
     public function test_unlock_link_ignores_the_forwarded_host_for_its_signed_url(): void
@@ -226,7 +229,10 @@ class ApiAuthTest extends TestCase
         $this->travel(2)->minutes();
         $this->withServerVariables($proxy)->get($unlockUrl)->assertRedirect('https://daymark-test.onrender.com/?unlocked=1');
         $this->assertFalse($user->fresh()->is_locked);
-        $this->assertDatabaseMissing('verification_tokens', ['user_id' => $user->id]);
+        $this->assertDatabaseMissing('verification_tokens', [
+            'user_id' => $user->id,
+            'type' => 'account_unlock',
+        ]);
     }
 
     public function test_registration_rejects_a_custom_email_domain(): void
@@ -381,20 +387,18 @@ class ApiAuthTest extends TestCase
         $expectedColumnDefinitions = [
             'users' => [
                 ['id', 'uuid', null, 'NO', null],
-                ['name', 'character varying', 255, 'NO', null],
                 ['first_name', 'character varying', 50, 'NO', null],
                 ['last_name', 'character varying', 50, 'NO', null],
                 ['middle_initial', 'character varying', 2, 'YES', null],
                 ['birthday', 'date', null, 'NO', null],
                 ['email', 'character varying', 255, 'NO', null],
                 ['email_verified_at', 'timestamp without time zone', null, 'YES', null],
-                ['password', 'character varying', 255, 'NO', null],
+                ['password_hash', 'character varying', 255, 'NO', null],
                 ['mobile_number', 'character varying', 20, 'NO', null],
                 ['mobile_verified', 'boolean', null, 'NO', 'false'],
                 ['failed_login_attempts', 'integer', null, 'NO', '0'],
                 ['is_locked', 'boolean', null, 'NO', 'false'],
-                ['locked_until', 'timestamp without time zone', null, 'YES', null],
-                ['remember_token', 'character varying', 100, 'YES', null],
+                ['lockout_until', 'timestamp without time zone', null, 'YES', null],
                 ['created_at', 'timestamp without time zone', null, 'YES', null],
                 ['updated_at', 'timestamp without time zone', null, 'YES', null],
             ],
@@ -406,8 +410,6 @@ class ApiAuthTest extends TestCase
                 ['city', 'character varying', 100, 'NO', null],
                 ['state', 'character varying', 100, 'NO', null],
                 ['zip_code', 'character varying', 20, 'NO', null],
-                ['created_at', 'timestamp without time zone', null, 'YES', null],
-                ['updated_at', 'timestamp without time zone', null, 'YES', null],
             ],
             'verification_tokens' => [
                 ['id', 'uuid', null, 'NO', null],
@@ -415,8 +417,6 @@ class ApiAuthTest extends TestCase
                 ['token_hash', 'character varying', 255, 'NO', null],
                 ['type', 'USER-DEFINED', null, 'NO', null],
                 ['expires_at', 'timestamp without time zone', null, 'NO', null],
-                ['created_at', 'timestamp without time zone', null, 'YES', null],
-                ['updated_at', 'timestamp without time zone', null, 'YES', null],
             ],
         ];
         $expectedColumns = [];
@@ -459,7 +459,7 @@ class ApiAuthTest extends TestCase
             ['users', 'users_mobile_number_unique', 'UNIQUE'],
             ['verification_tokens', 'verification_tokens_pkey', 'PRIMARY KEY'],
             ['verification_tokens', 'verification_tokens_user_id_foreign', 'FOREIGN KEY'],
-            ['verification_tokens', 'verification_tokens_user_id_unique', 'UNIQUE'],
+            ['verification_tokens', 'verification_tokens_user_id_type_unique', 'UNIQUE'],
         ], $actualConstraints);
 
         $foreignKeys = DB::select(
@@ -621,13 +621,12 @@ class ApiAuthTest extends TestCase
         });
 
         $user = User::forceCreate([
-            'name' => 'Maria Santos',
             'first_name' => 'Maria',
             'last_name' => 'Santos',
             'birthday' => '1995-04-17',
             'email' => 'maria.santos@gmail.com',
             'email_verified_at' => now(),
-            'password' => 'SafePassword!482',
+            'password_hash' => 'SafePassword!482',
             'mobile_number' => '+639171234567',
             'mobile_verified' => true,
             'mobile_verified' => true,
@@ -704,13 +703,12 @@ class ApiAuthTest extends TestCase
         Mail::shouldReceive('raw')->once()->andThrow(new \RuntimeException('SMTP unavailable'));
 
         $user = User::forceCreate([
-            'name' => 'Maria Santos',
             'first_name' => 'Maria',
             'last_name' => 'Santos',
             'birthday' => '1995-04-17',
             'email' => 'maria.santos@gmail.com',
             'email_verified_at' => now(),
-            'password' => 'SafePassword!482',
+            'password_hash' => 'SafePassword!482',
             'mobile_number' => '+639171234567',
             'mobile_verified' => true,
         ]);
@@ -739,13 +737,12 @@ class ApiAuthTest extends TestCase
     public function test_login_authenticates_with_a_cookie_session_that_logout_invalidates(): void
     {
         $user = User::forceCreate([
-            'name' => 'Maria Santos',
             'first_name' => 'Maria',
             'last_name' => 'Santos',
             'birthday' => '1995-04-17',
             'email' => 'maria.santos@gmail.com',
             'email_verified_at' => now(),
-            'password' => 'SafePassword!482',
+            'password_hash' => 'SafePassword!482',
             'mobile_number' => '+639171234567',
             'mobile_verified' => true,
             'failed_login_attempts' => 2,
@@ -776,24 +773,22 @@ class ApiAuthTest extends TestCase
         $this->getJson('/api/accounts')->assertUnauthorized();
 
         User::forceCreate([
-            'name' => 'Maria Santos',
             'first_name' => 'Maria',
             'last_name' => 'Santos',
             'birthday' => '1995-04-17',
             'email' => 'maria.santos@gmail.com',
             'email_verified_at' => now(),
-            'password' => 'SafePassword!482',
+            'password_hash' => 'SafePassword!482',
             'mobile_number' => '+639171234567',
             'mobile_verified' => true,
         ]);
         User::forceCreate([
-            'name' => 'Ana Cruz',
             'first_name' => 'Ana',
             'last_name' => 'Cruz',
             'birthday' => '1994-03-12',
             'email' => 'ana.cruz@gmail.com',
             'email_verified_at' => null,
-            'password' => 'SafePassword!482',
+            'password_hash' => 'SafePassword!482',
             'mobile_number' => '+639181234567',
         ]);
 
@@ -823,13 +818,12 @@ class ApiAuthTest extends TestCase
     public function test_valid_mobile_code_verifies_the_number_and_signs_in(): void
     {
         $user = User::forceCreate([
-            'name' => 'Maria Santos',
             'first_name' => 'Maria',
             'last_name' => 'Santos',
             'birthday' => '1995-04-17',
             'email' => 'maria.santos@gmail.com',
             'email_verified_at' => now(),
-            'password' => 'SafePassword!482',
+            'password_hash' => 'SafePassword!482',
             'mobile_number' => '+639171234567',
         ]);
         $code = '731942';
@@ -841,8 +835,6 @@ class ApiAuthTest extends TestCase
             'token_hash' => hash_hmac('sha256', $code, config('app.key')),
             'type' => 'mobile_otp',
             'expires_at' => $now->copy()->addMinutes(5),
-            'created_at' => $now,
-            'updated_at' => $now,
         ]);
 
         $response = $this->postJson('/api/mobile/verify', [
@@ -854,7 +846,56 @@ class ApiAuthTest extends TestCase
         $this->assertTrue($user->fresh()->mobile_verified);
         $this->assertSame($user->id, $response->json('user.id'));
         $this->getJson('/api/me')->assertOk()->assertJsonPath('email', $user->email);
-        $this->assertDatabaseMissing('verification_tokens', ['user_id' => $user->id]);
+        $this->assertDatabaseMissing('verification_tokens', [
+            'user_id' => $user->id,
+            'type' => 'mobile_otp',
+        ]);
+    }
+
+    public function test_mobile_otp_and_account_unlock_tokens_coexist_by_type(): void
+    {
+        $this->freezeTime();
+
+        $user = User::forceCreate([
+            'first_name' => 'Maria',
+            'last_name' => 'Santos',
+            'birthday' => '1995-04-17',
+            'email' => 'maria.token-types@gmail.com',
+            'email_verified_at' => now(),
+            'password_hash' => 'SafePassword!482',
+            'mobile_number' => '+639171234567',
+        ]);
+        $code = '731942';
+        $expiresAt = now()->addMinutes(5);
+
+        DB::table('verification_tokens')->insert([
+            [
+                'id' => (string) Str::uuid(),
+                'user_id' => $user->id,
+                'token_hash' => hash_hmac('sha256', 'unlock-token', config('app.key')),
+                'type' => 'account_unlock',
+                'expires_at' => now()->addMinutes(15),
+            ],
+            [
+                'id' => (string) Str::uuid(),
+                'user_id' => $user->id,
+                'token_hash' => hash_hmac('sha256', $code, config('app.key')),
+                'type' => 'mobile_otp',
+                'expires_at' => $expiresAt,
+            ],
+        ]);
+
+        $this->assertDatabaseCount('verification_tokens', 2);
+        $this->postJson('/api/mobile/verify', [
+            'email' => $user->email,
+            'password' => 'SafePassword!482',
+            'code' => $code,
+        ])->assertOk();
+
+        $this->assertDatabaseMissing('verification_tokens', [
+            'user_id' => $user->id,
+            'type' => 'mobile_otp',
+        ]);
     }
 
     public function test_mobile_code_is_expired_at_the_five_minute_boundary(): void
@@ -862,13 +903,12 @@ class ApiAuthTest extends TestCase
         $this->freezeTime();
 
         $user = User::forceCreate([
-            'name' => 'Maria Santos',
             'first_name' => 'Maria',
             'last_name' => 'Santos',
             'birthday' => '1995-04-17',
             'email' => 'maria.santos@gmail.com',
             'email_verified_at' => now(),
-            'password' => 'SafePassword!482',
+            'password_hash' => 'SafePassword!482',
             'mobile_number' => '+639171234567',
         ]);
         $code = '731942';
@@ -880,8 +920,6 @@ class ApiAuthTest extends TestCase
             'token_hash' => hash_hmac('sha256', $code, config('app.key')),
             'type' => 'mobile_otp',
             'expires_at' => $now->copy()->addMinutes(5),
-            'created_at' => $now,
-            'updated_at' => $now,
         ]);
 
         $this->travel(5)->minutes();
@@ -897,15 +935,20 @@ class ApiAuthTest extends TestCase
     {
         $this->freezeTime();
         Mail::fake();
+        config([
+            'services.textbee.api_key' => 'test-api-key',
+            'services.textbee.gateway_id' => 'test-gateway',
+        ]);
+        Http::preventStrayRequests();
+        Http::fake(['api.textbee.dev/api/v1/gateway/send-sms' => Http::response(['success' => true], 200)]);
 
         $user = User::forceCreate([
-            'name' => 'Maria Santos',
             'first_name' => 'Maria',
             'last_name' => 'Santos',
             'birthday' => '1995-04-17',
             'email' => 'maria.santos@gmail.com',
             'email_verified_at' => now(),
-            'password' => 'SafePassword!482',
+            'password_hash' => 'SafePassword!482',
             'mobile_number' => '+639171234567',
         ]);
         $user->address()->create([
@@ -923,8 +966,6 @@ class ApiAuthTest extends TestCase
             'token_hash' => hash_hmac('sha256', '731942', config('app.key')),
             'type' => 'mobile_otp',
             'expires_at' => $now->copy()->addMinutes(5),
-            'created_at' => $now,
-            'updated_at' => $now,
         ]);
 
         for ($attempt = 0; $attempt < 2; $attempt++) {
@@ -990,13 +1031,12 @@ class ApiAuthTest extends TestCase
         Http::fake(['api.textbee.dev/api/v1/gateway/send-sms' => Http::response(['success' => true], 200)]);
 
         $user = User::forceCreate([
-            'name' => 'Maria Santos',
             'first_name' => 'Maria',
             'last_name' => 'Santos',
             'birthday' => '1995-04-17',
             'email' => 'maria.santos@gmail.com',
             'email_verified_at' => now(),
-            'password' => 'SafePassword!482',
+            'password_hash' => 'SafePassword!482',
             'mobile_number' => '+639171234567',
         ]);
         $user->address()->create([
@@ -1050,7 +1090,10 @@ class ApiAuthTest extends TestCase
             'password' => 'SafePassword!482',
         ])->assertOk()->assertJsonPath('message', 'A new verification code has been sent.');
 
-        $verification = DB::table('verification_tokens')->where('user_id', $user->id)->first();
+        $verification = DB::table('verification_tokens')
+            ->where('user_id', $user->id)
+            ->where('type', 'mobile_otp')
+            ->first();
         $this->assertSame(now()->addMinutes(5)->toDateTimeString(), $verification->expires_at);
         $otpState = app(LocalJsonStore::class)->read()['otp'][$user->id];
         $this->assertSame(now()->addSeconds(60)->timestamp, $otpState['resend_until']);
@@ -1092,13 +1135,12 @@ class ApiAuthTest extends TestCase
         Http::fake(['api.textbee.dev/api/v1/gateway/send-sms' => Http::response(['success' => true], 200)]);
 
         $user = User::forceCreate([
-            'name' => 'Maria Santos',
             'first_name' => 'Maria',
             'last_name' => 'Santos',
             'birthday' => '1995-04-17',
             'email' => 'maria.santos@gmail.com',
             'email_verified_at' => now(),
-            'password' => 'SafePassword!482',
+            'password_hash' => 'SafePassword!482',
             'mobile_number' => '+4915112345678',
         ]);
         $user->address()->create([
@@ -1123,13 +1165,12 @@ class ApiAuthTest extends TestCase
     private function makeUnlockTestUser(string $email): User
     {
         return User::forceCreate([
-            'name' => 'Maria Santos',
             'first_name' => 'Maria',
             'last_name' => 'Santos',
             'birthday' => '1995-04-17',
             'email' => $email,
             'email_verified_at' => now(),
-            'password' => 'SafePassword!482',
+            'password_hash' => 'SafePassword!482',
             'mobile_number' => '+639171234567',
             'mobile_verified' => true,
         ]);
@@ -1169,7 +1210,10 @@ class ApiAuthTest extends TestCase
         $this->assertCount(1, $matches);
 
         parse_str((string) parse_url($matches[0], PHP_URL_QUERY), $query);
-        $verification = DB::table('verification_tokens')->where('user_id', $user->id)->first();
+        $verification = DB::table('verification_tokens')
+            ->where('user_id', $user->id)
+            ->where('type', 'account_unlock')
+            ->first();
         $this->assertNotSame($query['token'], $verification->token_hash);
         $this->assertSame(hash_hmac('sha256', $query['token'], config('app.key')), $verification->token_hash);
 

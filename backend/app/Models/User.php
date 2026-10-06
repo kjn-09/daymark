@@ -12,8 +12,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'first_name', 'last_name', 'middle_initial', 'birthday', 'email', 'password', 'mobile_number', 'mobile_verified', 'failed_login_attempts', 'is_locked', 'lockout_until'])]
-#[Hidden(['password', 'remember_token', 'failed_login_attempts', 'is_locked', 'lockout_until'])]
+#[Fillable(['first_name', 'last_name', 'middle_initial', 'birthday', 'email', 'password_hash', 'mobile_number', 'mobile_verified', 'failed_login_attempts', 'is_locked', 'lockout_until'])]
+#[Hidden(['password_hash', 'failed_login_attempts', 'is_locked', 'lockout_until'])]
 class User extends Authenticatable implements MustVerifyEmailContract
 {
     /** @use HasFactory<UserFactory> */
@@ -32,8 +32,23 @@ class User extends Authenticatable implements MustVerifyEmailContract
             'mobile_verified' => 'boolean',
             'is_locked' => 'boolean',
             'lockout_until' => 'datetime',
-            'password' => 'hashed',
+            'password_hash' => 'hashed',
         ];
+    }
+
+    public function getAuthPassword(): string
+    {
+        return $this->password_hash;
+    }
+
+    public function getAuthPasswordName(): string
+    {
+        return 'password_hash';
+    }
+
+    public function getRememberTokenName(): string
+    {
+        return '';
     }
 
     public function address(): HasOne

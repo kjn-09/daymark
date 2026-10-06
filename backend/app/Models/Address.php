@@ -12,6 +12,8 @@ class Address extends Model
 {
     use HasUuids;
 
+    public $timestamps = false;
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
