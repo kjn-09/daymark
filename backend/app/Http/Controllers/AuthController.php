@@ -482,11 +482,11 @@ class AuthController extends Controller
         $accounts = User::query()
             ->orderBy('last_name')
             ->orderBy('first_name')
-            ->get(['first_name', 'last_name', 'email', 'email_verified_at'])
+            ->get(['first_name', 'last_name', 'email', 'email_verified_at', 'mobile_verified'])
             ->map(fn (User $user): array => [
                 'name' => trim($user->first_name.' '.$user->last_name),
                 'email' => $user->email,
-                'email_verified' => $user->email_verified_at !== null,
+                'email_verified' => $user->email_verified_at !== null && $user->mobile_verified,
             ]);
 
         return response()->json(['accounts' => $accounts]);

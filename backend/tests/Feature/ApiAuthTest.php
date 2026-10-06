@@ -791,6 +791,16 @@ class ApiAuthTest extends TestCase
             'password_hash' => 'SafePassword!482',
             'mobile_number' => '+639181234567',
         ]);
+        User::forceCreate([
+            'first_name' => 'Liza',
+            'last_name' => 'Reyes',
+            'birthday' => '1993-02-08',
+            'email' => 'liza.reyes@gmail.com',
+            'email_verified_at' => now(),
+            'password_hash' => 'SafePassword!482',
+            'mobile_number' => '+639191234567',
+            'mobile_verified' => false,
+        ]);
 
         $this->postJson('/api/login', [
             'email' => 'maria.santos@gmail.com',
@@ -804,6 +814,11 @@ class ApiAuthTest extends TestCase
                     [
                         'name' => 'Ana Cruz',
                         'email' => 'ana.cruz@gmail.com',
+                        'email_verified' => false,
+                    ],
+                    [
+                        'name' => 'Liza Reyes',
+                        'email' => 'liza.reyes@gmail.com',
                         'email_verified' => false,
                     ],
                     [
