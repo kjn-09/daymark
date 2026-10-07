@@ -68,6 +68,8 @@ return [
             ['date' => '2022-12-08', 'name' => 'Feast of the Immaculate Conception of Mary', 'type' => 'Special Non-Working Day'],
             ['date' => '2022-12-25', 'name' => 'Christmas Day', 'type' => 'Regular Holiday'],
             ['date' => '2022-12-30', 'name' => 'Rizal Day', 'type' => 'Regular Holiday'],
+            ['date' => '2022-10-31', 'name' => 'Special family ties and domestic tourism day', 'type' => 'Special Non-Working Day'],
+            ['date' => '2022-12-26', 'name' => 'Special day after christmas', 'type' => 'Special Non-Working Day'],
         ],
         2023 => [
             ['date' => '2023-01-01', 'name' => "New Year's Day", 'type' => 'Regular Holiday'],
