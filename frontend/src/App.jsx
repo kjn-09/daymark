@@ -99,9 +99,12 @@ function App() {
     && cityOptionsLoaded
     && cityOptions.length === 0
   const countryCityOptions = [...new Set(cityOptions.length > 0 ? cityOptions : cityUsesRegionFallback ? [form.state] : [])]
+  const selectedPhProvince = phAddressData.provinces.find((province) => province.psgcCode === form.province_code)
   const phCityOptions = [...new Map(phAddressData.cities
     .filter((city) => form.province_code === 'NCR'
-      ? city.provinceCode === '130000000' || city.provinceName === 'Metro Manila (NCR)'
+      ? city.provinceCode === selectedPhProvince?.regionCode
+        || city.regionCode === selectedPhProvince?.regionCode
+        || city.provinceName === 'Metro Manila (NCR)'
       : city.provinceCode === form.province_code)
     .map((city) => [city.psgcCode, city])).values()]
   const citySelectOptions = [...new Map((selectedCountryCode === 'PH'
@@ -362,11 +365,15 @@ function App() {
     let active = true
     import('@aivangogh/ph-address').then((addressData) => {
       if (!active) return
+      const ncrRegion = addressData.getAllRegions().find((region) => /national capital|\bncr\b/i.test(region.name))
+      const ncrRegionCode = String(ncrRegion?.psgcCode || '1300000000')
       const cities = [...new Map(addressData.getAllMunicipalities().map((city) => [city.psgcCode, city])).values()].map((city) => {
         const province = addressData.getProvinceByCode(city.provinceCode)
         return {
           ...city,
-          provinceName: province?.name || (city.provinceCode === '130000000' || province?.regionCode === '130000000' ? 'Metro Manila (NCR)' : ''),
+          provinceCode: String(city.provinceCode || ''),
+          regionCode: String(province?.regionCode || city.regionCode || ''),
+          provinceName: province?.name || '',
         }
       })
       const postalCodesByCity = form.city_code
@@ -375,7 +382,7 @@ function App() {
       setPhAddressData((current) => ({
         provinces: current.provinces.length ? current.provinces : [
           ...addressData.getAllProvinces(),
-          { psgcCode: 'NCR', name: 'Metro Manila (NCR)', regionCode: '130000000' },
+          { psgcCode: 'NCR', name: 'Metro Manila (NCR)', regionCode: ncrRegionCode },
         ].sort((first, second) => first.name.localeCompare(second.name)),
         cities: current.cities.length ? current.cities : cities,
         postalCodesByCity: { ...current.postalCodesByCity, ...postalCodesByCity },
@@ -634,7 +641,7 @@ function App() {
                   if (selectedCountryCode === 'PH') {
                     const city = phCityOptions.find((item) => item.psgcCode === event.target.value)
                     updateFormField('city', city?.name || '', event.currentTarget, ['zip_code'])
-                    setForm((current) => ({ ...current, state: city?.provinceName || '', city_code: event.target.value, zip_code: '' }))
+                    setForm((current) => ({ ...current, city_code: event.target.value, zip_code: '' }))
                   } else {
                     updateFormField('city', event.target.value, event.currentTarget)
                   }
