@@ -140,8 +140,8 @@ return [
             ['date' => '2025-12-25', 'name' => 'Christmas Day', 'type' => 'Regular Holiday'],
             ['date' => '2025-12-30', 'name' => 'Rizal Day', 'type' => 'Regular Holiday'],
             ['date' => '2025-12-31', 'name' => 'Last Day of the Year', 'type' => 'Special Non-Working Day'],
-            ['date' => '2025-5-12', 'name' => 'National and Local Elections', 'type' => 'Special Non-Working Day'],
-            ['date' => '2025-7-27', 'name' => 'Founding Anniversary of Iglesia ni Cristo (INC)', 'type' => 'Special Non-Working Day'],
+            ['date' => '2025-05-12', 'name' => 'National and Local Elections', 'type' => 'Special Non-Working Day'],
+            ['date' => '2025-07-27', 'name' => 'Founding Anniversary of Iglesia ni Cristo (INC)', 'type' => 'Special Non-Working Day'],
 
 
         ],
