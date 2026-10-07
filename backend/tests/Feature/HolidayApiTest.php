@@ -33,7 +33,7 @@ class HolidayApiTest extends TestCase
             2021 => '01-01,02-12,02-25,04-01,04-02,04-03,04-09,05-01,05-13,06-12,07-20,08-21,08-30,11-01,11-30,12-08,12-25,12-30',
             2022 => '01-01,02-01,02-25,04-09,04-14,04-15,04-16,05-01,05-03,05-09,06-12,07-09,08-21,08-29,11-01,11-30,12-08,12-25,12-30',
             2023 => '01-01,01-02,01-22,02-24,04-06,04-07,04-08,04-10,04-21,05-01,06-12,06-28,08-21,08-28,11-01,11-02,11-27,12-08,12-25,12-30,12-31',
-            2024 => '01-01,02-09,02-10,03-28,03-29,03-30,04-09,05-01,06-12,06-17,08-23,08-26,11-01,11-02,11-30,12-08,12-24,12-25,12-30,12-31',
+            2024 => '01-01,02-09,02-10,03-28,03-29,03-30,04-09,04-10,05-01,06-12,06-17,08-23,08-26,11-01,11-02,11-30,12-08,12-24,12-25,12-30,12-31',
             2025 => '01-01,01-29,04-01,04-09,04-17,04-18,04-19,05-01,06-06,06-12,08-21,08-25,10-31,11-01,11-30,12-08,12-24,12-25,12-30,12-31',
             2026 => '01-01,02-17,03-20,04-02,04-03,04-04,04-09,05-01,05-27,06-12,08-21,08-31,11-01,11-02,11-30,12-08,12-24,12-25,12-30,12-31',
             2027 => '01-01,02-06,03-10,03-25,03-26,03-27,04-09,05-01,05-17,06-12,08-21,08-30,11-01,11-02,11-30,12-08,12-24,12-25,12-30,12-31',
@@ -56,6 +56,11 @@ class HolidayApiTest extends TestCase
                 $actualMonthDays,
                 "Holiday date inventory differs for {$year}.",
             );
+            foreach ($holidays as $holiday) {
+                if (str_contains($holiday['name'], 'Eid')) {
+                    $this->assertSame('Islamic Holiday', $holiday['type'], "Islamic holiday category differs for {$holiday['date']}.");
+                }
+            }
 
             Http::assertSent(fn (Request $request): bool => $request->url() === "https://date.nager.at/api/v3/PublicHolidays/{$year}/PH");
         }
@@ -119,12 +124,12 @@ class HolidayApiTest extends TestCase
             ->assertJsonMissing(['date' => '2023-11-30']);
 
         $this->getJson('/api/holidays/2024')
-            ->assertJsonFragment(['date' => '2024-04-09', 'name' => "Araw ng Kagitingan & Eid'l Fitr", 'type' => 'Regular Holiday'])
+            ->assertJsonFragment(['date' => '2024-04-09', 'name' => "Araw ng Kagitingan & Eid'l Fitr", 'type' => 'Islamic Holiday'])
             ->assertJsonFragment(['date' => '2024-08-23', 'name' => 'Ninoy Aquino Day', 'type' => 'Special Non-Working Day'])
             ->assertJsonMissing(['date' => '2024-08-21']);
 
         $this->getJson('/api/holidays/2025')
-            ->assertJsonFragment(['date' => '2025-04-01', 'name' => "Eid'l Fitr", 'type' => 'Regular Holiday'])
+            ->assertJsonFragment(['date' => '2025-04-01', 'name' => "Eid'l Fitr", 'type' => 'Islamic Holiday'])
             ->assertJsonFragment(['date' => '2025-10-31', 'name' => "All Saints' Day Eve", 'type' => 'Special Non-Working Day'])
             ->assertJsonMissing(['date' => '2025-11-02']);
     }
@@ -139,13 +144,13 @@ class HolidayApiTest extends TestCase
             ->assertJsonFragment([
                 'date' => '2027-03-10',
                 'name' => "Eid'l Fitr",
-                'type' => 'Regular Holiday',
+                'type' => 'Islamic Holiday',
                 'estimated' => true,
             ])
             ->assertJsonFragment([
                 'date' => '2027-05-17',
                 'name' => "Eid'l Adha",
-                'type' => 'Regular Holiday',
+                'type' => 'Islamic Holiday',
                 'estimated' => true,
             ])
             ->assertJsonMissing(['date' => '2027-01-02']);
