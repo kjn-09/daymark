@@ -87,7 +87,8 @@ function App() {
     && /[a-z]/.test(form.password)
     && /\d/.test(form.password)
     && /[^A-Za-z0-9]/.test(form.password)
-  const stateOptions = statesByCountry[selectedCountryCode] || []
+  const stateOptions = [...new Set(statesByCountry[selectedCountryCode] || [])]
+  const countryOptions = [...new Map(registrationCountries.map((country) => [country.shortName, country])).values()]
   const countryStatesLoaded = Object.hasOwn(statesByCountry, selectedCountryCode)
   const cityKey = `${selectedCountryCode}:${form.state}`
   const cityOptions = loadedCities.key === cityKey ? loadedCities.values : []
@@ -97,8 +98,11 @@ function App() {
     && Boolean(form.state)
     && cityOptionsLoaded
     && cityOptions.length === 0
-  const countryCityOptions = cityOptions.length > 0 ? cityOptions : cityUsesRegionFallback ? [form.state] : []
-  const phCityOptions = phAddressData.cities
+  const countryCityOptions = [...new Set(cityOptions.length > 0 ? cityOptions : cityUsesRegionFallback ? [form.state] : [])]
+  const phCityOptions = [...new Map(phAddressData.cities.map((city) => [city.psgcCode, city])).values()]
+  const citySelectOptions = [...new Map((selectedCountryCode === 'PH'
+    ? phCityOptions.map((city) => ({ value: city.psgcCode, name: city.name }))
+    : countryCityOptions.map((city) => ({ value: city, name: city }))).map((city) => [city.value, city])).values()]
   const caloocanPostalCodes = form.city.toLowerCase().includes('caloocan')
     ? [
       { postalCode: '1409', label: 'Kaunlaran Village' },
@@ -354,7 +358,7 @@ function App() {
     let active = true
     import('@aivangogh/ph-address').then((addressData) => {
       if (!active) return
-      const cities = addressData.getAllMunicipalities().map((city) => {
+      const cities = [...new Map(addressData.getAllMunicipalities().map((city) => [city.psgcCode, city])).values()].map((city) => {
         const province = addressData.getProvinceByCode(city.provinceCode)
         return {
           ...city,
@@ -598,7 +602,7 @@ function App() {
                 <label>Email address<input name="email" type="email" autoComplete="email" required value={form.email} onChange={(event) => updateFormField('email', event.target.value, event.currentTarget)} placeholder="you@example.com" />{fieldError('email')}</label>
               </div>
               <div className="form-row">
-                <label>Country<select name="country" required value={form.country} onChange={(event) => updateFormField('country', event.target.value, event.currentTarget, ['mobile_number', 'state', 'city', 'city_code', 'zip_code'])}><option value="">Select a country</option>{registrationCountries.map((country) => <option key={country.shortName} value={country.name}>{country.name}</option>)}</select>{fieldError('country')}</label>
+                <label>Country<select name="country" required value={form.country} onChange={(event) => updateFormField('country', event.target.value, event.currentTarget, ['mobile_number', 'state', 'city', 'city_code', 'zip_code'])}><option value="">Select a country</option>{countryOptions.map((country) => <option key={country.shortName} value={country.name}>{country.name}</option>)}</select>{fieldError('country')}</label>
                 <label>Mobile number<span className="phone-field"><span>+{selectedCountryCallingCode}</span><input name="mobile_number" type="tel" inputMode="tel" autoComplete="tel-national" required value={form.mobile_number} onChange={(event) => {
                   let digits = event.target.value.replace(/\D/g, '').slice(0, 15)
                   if (selectedCountryCode === 'PH' && digits.startsWith('0') && digits.length >= 11) digits = digits.slice(1)
@@ -607,7 +611,7 @@ function App() {
               </div>
               <label>House &amp; street<input name="house_street" autoComplete="street-address" required maxLength="255" pattern="[\p{L}\p{M}\p{N}\s.,#'\/()-]+" value={form.house_street} onChange={(event) => updateFormField('house_street', event.target.value, event.currentTarget)} placeholder="House number, street, and barangay" />{fieldError('house_street')}</label>
               <div className="form-row three-columns">
-                {selectedCountryCode !== 'PH' && (!selectedCountry
+                {(!selectedCountry || selectedCountryCode !== 'PH') && (!selectedCountry
                   ? <label>State<select name="state" autoComplete="address-level1" required disabled value=""><option value="">Select a country first</option></select>{fieldError('state')}</label>
                   : <label>State{countryStatesLoaded && stateOptions.length === 0
                     ? <input name="state" autoComplete="address-level1" required disabled={!selectedCountry} maxLength="100" value={form.state} onChange={(event) => updateFormField('state', event.target.value, event.currentTarget)} placeholder="State" />
@@ -620,8 +624,8 @@ function App() {
                   } else {
                     updateFormField('city', event.target.value, event.currentTarget)
                   }
-                }}><option value="">{selectedCountryCode === 'PH' ? selectedCountry ? 'City / Municipality' : 'Select a country first' : 'Select a city or region'}</option>{(selectedCountryCode === 'PH' ? phCityOptions.map((city) => ({ value: city.psgcCode, name: city.name })) : countryCityOptions.map((city) => ({ value: city, name: city }))).map((city) => <option key={city.value} value={city.value}>{city.name}</option>)}</select>{fieldError('city')}</label>
-                <label>ZIP code{selectedCountryCode === 'PH' ? <select name="zip_code" autoComplete="postal-code" required disabled={!form.city_code || phPostalOptions.length === 0} value={form.zip_code} onChange={(event) => updateFormField('zip_code', event.target.value, event.currentTarget)}><option value="">Select a ZIP code</option>{phPostalOptions.map((postal, index) => <option key={`${postal.postalCode}-${index}`} value={postal.postalCode}>{postal.label ? `${postal.postalCode} — ${postal.label}` : postal.postalCode}</option>)}</select> : <input name="zip_code" autoComplete="postal-code" required maxLength="20" value={form.zip_code} onChange={(event) => updateFormField('zip_code', event.target.value.toUpperCase(), event.currentTarget)} placeholder="ZIP / postal code" />}{fieldError('zip_code')}</label>
+                }}><option value="">{selectedCountryCode === 'PH' ? selectedCountry ? 'City / Municipality' : 'Select a country first' : 'Select a city or region'}</option>{citySelectOptions.map((city) => <option key={city.value} value={city.value}>{city.name}</option>)}</select>{fieldError('city')}</label>
+                <label>ZIP code{selectedCountryCode === 'PH' ? <select name="zip_code" autoComplete="postal-code" required disabled={!form.city_code || phPostalOptions.length === 0} value={form.zip_code} onChange={(event) => updateFormField('zip_code', event.target.value, event.currentTarget)}><option value="">Select a ZIP code</option>{phPostalOptions.map((postal) => <option key={postal.postalCode} value={postal.postalCode}>{postal.label ? `${postal.postalCode} — ${postal.label}` : postal.postalCode}</option>)}</select> : <input name="zip_code" autoComplete="postal-code" required maxLength="20" value={form.zip_code} onChange={(event) => updateFormField('zip_code', event.target.value.toUpperCase(), event.currentTarget)} placeholder="ZIP / postal code" />}{fieldError('zip_code')}</label>
               </div>
             </>}
             {authMode !== 'register' && <label>Email address<input name="email" type="email" autoComplete="off" required value={form.email} onChange={(event) => updateFormField('email', event.target.value, event.currentTarget)} placeholder="you@example.com" />{fieldError('email')}</label>}
