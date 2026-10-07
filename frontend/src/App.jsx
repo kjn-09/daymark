@@ -32,7 +32,7 @@ const csrfHeaders = async () => {
   if (!response.ok || typeof data.token !== 'string') throw new Error('Could not start a secure session. Please try again.')
   return { 'X-CSRF-TOKEN': data.token }
 }
-const initialForm = { first_name: '', last_name: '', middle_initial: '', birthday: '', email: '', mobile_number: '', country: '', house_street: '', city: '', state: '', city_code: '', zip_code: '', password: '', password_confirmation: '' }
+const initialForm = { first_name: '', last_name: '', middle_initial: '', birthday: '', email: '', mobile_number: '', country: '', house_street: '', city: '', state: '', province_code: '', city_code: '', zip_code: '', password: '', password_confirmation: '' }
 const manilaDateParts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
 }).formatToParts(new Date()).map(({ type, value }) => [type, value]))
@@ -73,7 +73,7 @@ function App() {
   const [postalCodeFormats, setPostalCodeFormats] = useState({})
   const [loadedCities, setLoadedCities] = useState({ key: '', values: [] })
   const [statesByCountry, setStatesByCountry] = useState({})
-  const [phAddressData, setPhAddressData] = useState({ cities: [], postalCodesByCity: {} })
+  const [phAddressData, setPhAddressData] = useState({ provinces: [], cities: [], postalCodesByCity: {} })
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('Holidays')
@@ -99,7 +99,11 @@ function App() {
     && cityOptionsLoaded
     && cityOptions.length === 0
   const countryCityOptions = [...new Set(cityOptions.length > 0 ? cityOptions : cityUsesRegionFallback ? [form.state] : [])]
-  const phCityOptions = [...new Map(phAddressData.cities.map((city) => [city.psgcCode, city])).values()]
+  const phCityOptions = [...new Map(phAddressData.cities
+    .filter((city) => form.province_code === 'NCR'
+      ? city.provinceCode === '130000000' || city.provinceName === 'Metro Manila (NCR)'
+      : city.provinceCode === form.province_code)
+    .map((city) => [city.psgcCode, city])).values()]
   const citySelectOptions = [...new Map((selectedCountryCode === 'PH'
     ? phCityOptions.map((city) => ({ value: city.psgcCode, name: city.name }))
     : countryCityOptions.map((city) => ({ value: city, name: city }))).map((city) => [city.value, city])).values()]
@@ -369,6 +373,10 @@ function App() {
         ? { [form.city_code]: addressData.getPostalCodesByMunicipality(form.city_code) }
         : {}
       setPhAddressData((current) => ({
+        provinces: current.provinces.length ? current.provinces : [
+          ...addressData.getAllProvinces(),
+          { psgcCode: 'NCR', name: 'Metro Manila (NCR)', regionCode: '130000000' },
+        ].sort((first, second) => first.name.localeCompare(second.name)),
         cities: current.cities.length ? current.cities : cities,
         postalCodesByCity: { ...current.postalCodesByCity, ...postalCodesByCity },
       }))
@@ -602,7 +610,7 @@ function App() {
                 <label>Email address<input name="email" type="email" autoComplete="email" required value={form.email} onChange={(event) => updateFormField('email', event.target.value, event.currentTarget)} placeholder="you@example.com" />{fieldError('email')}</label>
               </div>
               <div className="form-row">
-                <label>Country<select name="country" required value={form.country} onChange={(event) => updateFormField('country', event.target.value, event.currentTarget, ['mobile_number', 'state', 'city', 'city_code', 'zip_code'])}><option value="">Select a country</option>{countryOptions.map((country) => <option key={country.shortName} value={country.name}>{country.name}</option>)}</select>{fieldError('country')}</label>
+                <label>Country<select name="country" required value={form.country} onChange={(event) => updateFormField('country', event.target.value, event.currentTarget, ['mobile_number', 'state', 'province_code', 'city', 'city_code', 'zip_code'])}><option value="">Select a country</option>{countryOptions.map((country) => <option key={country.shortName} value={country.name}>{country.name}</option>)}</select>{fieldError('country')}</label>
                 <label>Mobile number<span className="phone-field"><span>+{selectedCountryCallingCode}</span><input name="mobile_number" type="tel" inputMode="tel" autoComplete="tel-national" required value={form.mobile_number} onChange={(event) => {
                   let digits = event.target.value.replace(/\D/g, '').slice(0, 15)
                   if (selectedCountryCode === 'PH' && digits.startsWith('0') && digits.length >= 11) digits = digits.slice(1)
@@ -611,12 +619,18 @@ function App() {
               </div>
               <label>House &amp; street<input name="house_street" autoComplete="street-address" required maxLength="255" pattern="[\p{L}\p{M}\p{N}\s.,#'\/()-]+" value={form.house_street} onChange={(event) => updateFormField('house_street', event.target.value, event.currentTarget)} placeholder="House number, street, and barangay" />{fieldError('house_street')}</label>
               <div className="form-row three-columns">
-                {(!selectedCountry || selectedCountryCode !== 'PH') && (!selectedCountry
+                {!selectedCountry
                   ? <label>State<select name="state" autoComplete="address-level1" required disabled value=""><option value="">Select a country first</option></select>{fieldError('state')}</label>
+                  : selectedCountryCode === 'PH'
+                  ? <label>State / Province<select name="state" autoComplete="address-level1" required value={form.province_code} onChange={(event) => {
+                    const province = phAddressData.provinces.find((item) => item.psgcCode === event.target.value)
+                    updateFormField('state', province?.name || '', event.currentTarget, ['city', 'city_code', 'zip_code'])
+                    setForm((current) => ({ ...current, province_code: event.target.value, city: '', city_code: '', zip_code: '' }))
+                  }}><option value="">Select a state / province</option>{phAddressData.provinces.map((province) => <option key={province.psgcCode} value={province.psgcCode}>{province.name}</option>)}</select>{fieldError('state')}</label>
                   : <label>State{countryStatesLoaded && stateOptions.length === 0
                     ? <input name="state" autoComplete="address-level1" required disabled={!selectedCountry} maxLength="100" value={form.state} onChange={(event) => updateFormField('state', event.target.value, event.currentTarget)} placeholder="State" />
-                    : <select name="state" autoComplete="address-level1" required disabled={!selectedCountry} value={form.state} onChange={(event) => updateFormField('state', event.target.value, event.currentTarget, ['city'])}><option value="">Select a state</option>{stateOptions.map((state) => <option key={state} value={state}>{state}</option>)}</select>}{fieldError('state')}</label>)}
-                <label>City<select name="city" autoComplete="address-level2" required disabled={selectedCountryCode === 'PH' ? !selectedCountry || phCityOptions.length === 0 : !form.state || countryCityOptions.length === 0} value={selectedCountryCode === 'PH' ? form.city_code : form.city} onChange={(event) => {
+                    : <select name="state" autoComplete="address-level1" required disabled={!selectedCountry} value={form.state} onChange={(event) => updateFormField('state', event.target.value, event.currentTarget, ['city', 'zip_code'])}><option value="">Select a state</option>{stateOptions.map((state) => <option key={state} value={state}>{state}</option>)}</select>}{fieldError('state')}</label>}
+                <label>{selectedCountryCode === 'PH' ? 'City / Municipality' : 'City'}<select name="city" autoComplete="address-level2" required disabled={selectedCountryCode === 'PH' ? !selectedCountry || !form.province_code || phCityOptions.length === 0 : !form.state || countryCityOptions.length === 0} value={selectedCountryCode === 'PH' ? form.city_code : form.city} onChange={(event) => {
                   if (selectedCountryCode === 'PH') {
                     const city = phCityOptions.find((item) => item.psgcCode === event.target.value)
                     updateFormField('city', city?.name || '', event.currentTarget, ['zip_code'])
