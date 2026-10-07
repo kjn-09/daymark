@@ -777,15 +777,6 @@ class ApiAuthTest extends TestCase
 
         $this->travel(2)->minutes();
 
-        $stillLockedLoginResponse = $this->postJson('/api/login', [
-            'email' => $user->email,
-            'password' => 'SafePassword!482',
-        ]);
-        $stillLockedLoginResponse->assertStatus(423)->assertExactJson([
-            'message' => $lockoutMessage,
-        ]);
-        $this->assertTrue($user->fresh()->is_locked);
-
         $this->get($unlockUrlMatches[0])->assertRedirect();
         $this->assertFalse($user->fresh()->is_locked);
 
@@ -795,6 +786,86 @@ class ApiAuthTest extends TestCase
         ])->assertOk();
         $this->assertFalse($user->fresh()->is_locked);
         $this->assertSame(0, $user->fresh()->failed_login_attempts);
+    }
+
+    public function test_locked_account_resends_unlock_email_after_two_minutes_with_24_hour_expiration(): void
+    {
+        $this->freezeTime();
+        $unlockEmails = [];
+        Mail::shouldReceive('raw')->twice()->withArgs(function (string $text, \Closure $callback) use (&$unlockEmails): bool {
+            $unlockEmails[] = ['text' => $text, 'callback' => $callback];
+
+            return true;
+        });
+
+        $user = User::forceCreate([
+            'first_name' => 'Maria',
+            'last_name' => 'Santos',
+            'birthday' => '1995-04-17',
+            'email' => 'maria.santos@gmail.com',
+            'email_verified_at' => now(),
+            'password_hash' => 'SafePassword!482',
+            'mobile_number' => '+639171234567',
+            'mobile_verified' => true,
+        ]);
+
+        for ($attempt = 0; $attempt < 3; $attempt++) {
+            $response = $this->postJson('/api/login', [
+                'email' => $user->email,
+                'password' => 'wrong password',
+            ]);
+            $response->assertStatus($attempt === 2 ? 423 : 422);
+        }
+
+        $this->assertCount(1, $unlockEmails);
+        $firstExpiry = now()->addHours(24);
+        $this->assertSame(
+            $firstExpiry->toDateTimeString(),
+            Carbon::parse(DB::table('verification_tokens')->where('user_id', $user->id)->where('type', 'account_unlock')->value('expires_at'))->toDateTimeString(),
+        );
+
+        $this->travel(1)->minutes();
+        $this->postJson('/api/login', [
+            'email' => $user->email,
+            'password' => 'SafePassword!482',
+        ])->assertStatus(423);
+        $this->assertCount(1, $unlockEmails);
+        $initialLockoutUntil = $user->fresh()->lockout_until->copy();
+
+        $this->travel(1)->minutes();
+        $this->postJson('/api/login', [
+            'email' => $user->email,
+            'password' => 'SafePassword!482',
+        ])->assertStatus(423);
+        $this->assertCount(2, $unlockEmails);
+        $resendAt = now();
+        $this->assertSame($initialLockoutUntil->toDateTimeString(), $user->fresh()->lockout_until->toDateTimeString());
+
+        foreach ($unlockEmails as $email) {
+            $mailMessage = \Mockery::mock();
+            $mailMessage->shouldReceive('to')->once()->with($user->email)->andReturnSelf();
+            $mailMessage->shouldReceive('subject')->once()->with('Daymark account security alert')->andReturnSelf();
+            $email['callback']($mailMessage);
+        }
+
+        preg_match('/https?:\/\/[^\s]+/', $unlockEmails[1]['text'], $unlockUrlMatches);
+        $this->assertCount(1, $unlockUrlMatches);
+        parse_str((string) parse_url($unlockUrlMatches[0], PHP_URL_QUERY), $query);
+        $this->assertSame((string) $resendAt->copy()->addHours(24)->timestamp, $query['expires']);
+        $this->assertSame(
+            $resendAt->copy()->addHours(24)->toDateTimeString(),
+            Carbon::parse(DB::table('verification_tokens')->where('user_id', $user->id)->where('type', 'account_unlock')->value('expires_at'))->toDateTimeString(),
+        );
+
+        $this->travel(1)->minutes();
+        $this->postJson('/api/login', [
+            'email' => $user->email,
+            'password' => 'SafePassword!482',
+        ])->assertStatus(423);
+        $this->assertCount(2, $unlockEmails);
+
+        $this->travelTo($resendAt->copy()->addHours(24));
+        $this->get($unlockUrlMatches[0])->assertForbidden();
     }
 
     public function test_failed_unlock_email_delivery_is_reported_instead_of_claiming_it_was_sent(): void

@@ -28,6 +28,10 @@ class AuthController extends Controller
 
     private const LOGIN_LOCKOUT_MESSAGE = 'Your account has been temporarily locked. An unlock email has been sent to your registered email address. Please check your inbox.';
 
+    private const UNLOCK_RESEND_COOLDOWN_MINUTES = 2;
+
+    private const UNLOCK_LINK_EXPIRATION_HOURS = 24;
+
     public function __construct(private readonly LocalJsonStore $localState) {}
 
     public function postalCodeFormat(string $countryCode): JsonResponse
@@ -167,6 +171,25 @@ class AuthController extends Controller
         }
 
         if ($user->is_locked) {
+            $lastUnlockEmailExpiry = DB::table('verification_tokens')
+                ->where('user_id', $user->id)
+                ->where('type', 'account_unlock')
+                ->value('expires_at');
+
+            if (
+                ! $lastUnlockEmailExpiry
+                || Carbon::parse($lastUnlockEmailExpiry)
+                    ->subHours(self::UNLOCK_LINK_EXPIRATION_HOURS)
+                    ->addMinutes(self::UNLOCK_RESEND_COOLDOWN_MINUTES)
+                    ->isPast()
+            ) {
+                if (! $this->sendUnlockEmail($user)) {
+                    return response()->json([
+                        'message' => 'Your account has been locked, but the unlock email could not be sent. Please contact support.',
+                    ], 503);
+                }
+            }
+
             return response()->json(['message' => self::LOGIN_LOCKOUT_MESSAGE], 423);
         }
 
@@ -183,7 +206,7 @@ class AuthController extends Controller
             ])->save();
 
             if ($attempts === 3) {
-                if (! $this->sendUnlockEmail($user, $request)) {
+                if (! $this->sendUnlockEmail($user)) {
                     return response()->json([
                         'message' => 'Your account has been locked, but the unlock email could not be sent. Please contact support.',
                     ], 503);
@@ -259,7 +282,7 @@ class AuthController extends Controller
                         'lockout_until' => now()->addMinutes(2),
                     ])->save();
 
-                    if (! $this->sendUnlockEmail($user, $request)) {
+                    if (! $this->sendUnlockEmail($user)) {
                         return response()->json([
                             'message' => 'Your account has been locked, but the unlock email could not be sent. Please contact support.',
                         ], 503);
@@ -423,7 +446,7 @@ class AuthController extends Controller
         ];
     }
 
-    private function sendUnlockEmail(User $user, Request $request): bool
+    private function sendUnlockEmail(User $user): bool
     {
         $this->localState->update(function (array &$state) use ($user): void {
             unset($state['otp'][$user->id]);
@@ -434,18 +457,19 @@ class AuthController extends Controller
         try {
             $token = bin2hex(random_bytes(32));
             $now = now();
+            $expiresAt = $now->copy()->addHours(self::UNLOCK_LINK_EXPIRATION_HOURS);
 
             DB::table('verification_tokens')->updateOrInsert(
                 ['user_id' => $user->id, 'type' => 'account_unlock'],
                 [
                     'id' => (string) Str::uuid(),
                     'token_hash' => hash_hmac('sha256', $token, config('app.key')),
-                    'expires_at' => $now->copy()->addMinutes(15),
+                    'expires_at' => $expiresAt,
                 ],
             );
             $urlGenerator = clone URL::getFacadeRoot();
             $urlGenerator->forceRootUrl(config('app.url'));
-            $url = $urlGenerator->temporarySignedRoute('account.unlock', $now->copy()->addMinutes(15), [
+            $url = $urlGenerator->temporarySignedRoute('account.unlock', $expiresAt, [
                 'id' => $user->id,
                 'token' => $token,
             ]);
