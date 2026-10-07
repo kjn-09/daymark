@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AsYouType, parsePhoneNumberFromString } from 'libphonenumber-js/max'
+import { AsYouType, getCountryCallingCode, parsePhoneNumberFromString } from 'libphonenumber-js/max'
 import registrationConfig from '../../shared/registration.json'
 import heroImage from './assets/hero.png'
 import {
@@ -32,17 +32,6 @@ const csrfHeaders = async () => {
   if (!response.ok || typeof data.token !== 'string') throw new Error('Could not start a secure session. Please try again.')
   return { 'X-CSRF-TOKEN': data.token }
 }
-let startupSessionReset
-const resetStartupSession = () => {
-  startupSessionReset ??= csrfHeaders().then((headers) => api('/logout', { method: 'POST', headers }))
-    .then(async (response) => {
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Could not end your previous session.')
-      }
-    })
-  return startupSessionReset
-}
 const initialForm = { first_name: '', last_name: '', middle_initial: '', birthday: '', email: '', mobile_number: '', country: '', house_street: '', city: '', state: '', region_code: '', city_code: '', zip_code: '', password: '', password_confirmation: '' }
 const manilaDateParts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -69,6 +58,7 @@ function App() {
   const [accountsLoading, setAccountsLoading] = useState(true)
   const [accountsError, setAccountsError] = useState('')
   const [user, setUser] = useState(null)
+  const [sessionLoading, setSessionLoading] = useState(true)
   const [modal, setModal] = useState('auth')
   const [authMode, setAuthMode] = useState('login')
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false)
@@ -91,6 +81,7 @@ function App() {
   const month = displayDate.getMonth()
   const selectedCountry = registrationCountries.find((country) => country.name === form.country)
   const selectedCountryCode = selectedCountry?.shortName || 'PH'
+  const selectedCountryCallingCode = getCountryCallingCode(selectedCountryCode)
   const passwordMeetsRequirements = form.password.length >= 12
     && /[A-Z]/.test(form.password)
     && /[a-z]/.test(form.password)
@@ -248,17 +239,29 @@ function App() {
 
   useEffect(() => {
     let active = true
-    localStorage.removeItem('daymark_token')
-    localStorage.removeItem('daymark_user')
-    resetStartupSession()
-      .then(() => {
-        if (active) setNotice(initialNotice)
+    api('/me', { cache: 'no-store' })
+      .then(async (response) => {
+        const data = await response.json()
+        if (!active) return
+        if (response.status === 401) {
+          setNotice(initialNotice)
+          return
+        }
+        if (!response.ok) throw new Error(data.message || 'Could not check your sign-in session.')
+        if (!data || typeof data !== 'object' || !data.id) {
+          throw new Error('The session service returned an invalid response.')
+        }
+        setUser(data)
+        setModal(null)
       })
       .catch((error) => {
-        if (active) setNotice(error.message || 'Could not end your previous session.')
+        if (active) setNotice(error.message || 'Could not check your sign-in session.')
       })
       .finally(() => {
-        if (active) setBusy(false)
+        if (active) {
+          setBusy(false)
+          setSessionLoading(false)
+        }
       })
 
     return () => { active = false }
@@ -454,7 +457,7 @@ function App() {
           ...form,
           country_code: selectedCountryCode,
           state: selectedCountryCode === 'PH' ? selectedRegion?.name || '' : form.state,
-          mobile_number: `+${selectedCountry?.phone || ''}${form.mobile_number.replace(/\D/g, '')}`,
+          mobile_number: `+${selectedCountryCallingCode}${form.mobile_number.replace(/\D/g, '')}`,
         }
         delete payload.region_code
         delete payload.city_code
@@ -552,6 +555,10 @@ function App() {
     (_, index) => firstHolidayYear + index,
   )
 
+  if (sessionLoading) {
+    return <div className="session-loading" role="status">Checking your sign-in session…</div>
+  }
+
   return (
     <div className="app-shell">
       {!startupAuth && <header className="topbar">
@@ -592,7 +599,7 @@ function App() {
               </div>
               <div className="form-row">
                 <label>Country<select name="country" required value={form.country} onChange={(event) => updateFormField('country', event.target.value, event.currentTarget, ['mobile_number', 'state', 'city', 'region_code', 'city_code', 'zip_code'])}><option value="">Select a country</option>{registrationCountries.map((country) => <option key={country.shortName} value={country.name}>{country.name}</option>)}</select>{fieldError('country')}</label>
-                <label>Mobile number<span className="phone-field"><span>+{selectedCountry?.phone || ''}</span><input name="mobile_number" type="tel" inputMode="tel" autoComplete="tel-national" required value={form.mobile_number} onChange={(event) => {
+                <label>Mobile number<span className="phone-field"><span>+{selectedCountryCallingCode}</span><input name="mobile_number" type="tel" inputMode="tel" autoComplete="tel-national" required value={form.mobile_number} onChange={(event) => {
                   let digits = event.target.value.replace(/\D/g, '').slice(0, 15)
                   if (selectedCountryCode === 'PH' && digits.startsWith('0') && digits.length >= 11) digits = digits.slice(1)
                   updateFormField('mobile_number', new AsYouType(selectedCountryCode).input(digits), event.currentTarget)
