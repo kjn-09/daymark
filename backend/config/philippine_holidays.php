@@ -74,7 +74,7 @@ return [
         2023 => [
             ['date' => '2023-01-01', 'name' => "New Year's Day", 'type' => 'Regular Holiday'],
             ['date' => '2023-01-02', 'name' => 'Additional Special Non-Working Day', 'type' => 'Special Non-Working Day'],
-            ['date' => '2023-01-22', 'name' => 'Chinese New Year', 'type' => 'Special Non-Working Day'],
+           // ['date' => '2023-01-22', 'name' => 'Chinese New Year', 'type' => 'Special Non-Working Day'],
             ['date' => '2023-02-24', 'name' => 'EDSA People Power Revolution Anniversary', 'type' => 'Special Non-Working Day'],
             ['date' => '2023-04-06', 'name' => 'Maundy Thursday', 'type' => 'Regular Holiday'],
             ['date' => '2023-04-07', 'name' => 'Good Friday', 'type' => 'Regular Holiday'],
@@ -93,6 +93,8 @@ return [
             ['date' => '2023-12-25', 'name' => 'Christmas Day', 'type' => 'Regular Holiday'],
             ['date' => '2023-12-30', 'name' => 'Rizal Day', 'type' => 'Regular Holiday'],
             ['date' => '2023-12-31', 'name' => 'Last Day of the Year', 'type' => 'Special Non-Working Day'],
+            ['date' => '2023-10-30', 'name' => 'Special non-working day', 'type' => 'Special Non-Working Day'],
+            ['date' => '2023-12-26', 'name' => 'Additional Special Non-Working Day', 'type' => 'Special Non-Working Day'],
         ],
         2024 => [
             ['date' => '2024-01-01', 'name' => "New Year's Day", 'type' => 'Regular Holiday'],
@@ -138,6 +140,10 @@ return [
             ['date' => '2025-12-25', 'name' => 'Christmas Day', 'type' => 'Regular Holiday'],
             ['date' => '2025-12-30', 'name' => 'Rizal Day', 'type' => 'Regular Holiday'],
             ['date' => '2025-12-31', 'name' => 'Last Day of the Year', 'type' => 'Special Non-Working Day'],
+            ['date' => '2025-5-12', 'name' => 'National and Local Elections', 'type' => 'Special Non-Working Day'],
+            ['date' => '2025-7-27', 'name' => 'Founding Anniversary of Iglesia ni Cristo (INC)', 'type' => 'Special Non-Working Day'],
+
+
         ],
         2026 => [
             ['date' => '2026-01-01', 'name' => "New Year's Day", 'type' => 'Regular Holiday'],
@@ -163,7 +169,7 @@ return [
         ],
         2027 => [
             ['date' => '2027-01-01', 'name' => "New Year's Day", 'type' => 'Regular Holiday'],
-            ['date' => '2027-01-02', 'name' => 'Additional Special Non-Working Day', 'type' => 'Special Non-Working Day'],
+           // ['date' => '2027-01-02', 'name' => 'Additional Special Non-Working Day', 'type' => 'Special Non-Working Day'],
             ['date' => '2027-02-06', 'name' => 'Chinese New Year', 'type' => 'Special Non-Working Day'],
             ['date' => '2027-03-10', 'name' => "Eid'l Fitr", 'type' => 'Islamic Holiday', 'estimated' => true],
             ['date' => '2027-03-25', 'name' => 'Maundy Thursday', 'type' => 'Regular Holiday'],
